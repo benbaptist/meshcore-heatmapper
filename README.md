@@ -1,66 +1,36 @@
 # MeshCore Heatmapper
 
-A Progressive Web App for BLE range testing and signal strength heatmap visualization with [MeshCore](https://meshcore.co/) devices.
+A single-page PWA that connects to a [MeshCore](https://meshcore.co/) node over BLE, runs range tests against repeaters, and builds signal strength heatmaps — great for testing antennas and doing quick wardrives, then comparing results side-by-side.
 
-<img src="icon-192.png" width="96" alt="MeshCore Heatmapper icon">
+## What it does
 
-## Features
+1. **Connect** — pairs with a MeshCore node via Web Bluetooth and pulls the contacts list.
+2. **Session** — pick any repeater from your contacts to start a range test. The app rapidly pings the repeater (default 1 s interval, waiting for each ping to finish before firing the next) until you stop it.
+3. **Live feedback** — a visual banner shows current state (waiting, pinging, received, timeout) along with cumulative stats and a scrollable ping log.
+4. **GPS tracking** — optionally attaches precise device GPS coordinates to each ping for geospatial heatmapping.
+5. **Heatmap** — renders each session as a colour-coded map (SNR or RTT) on an interactive canvas. Pan and zoom around your data.
+6. **A/B comparison** — select two sessions to overlay and compare them — perfect for A/B testing different antennas on repeaters or companion devices.
+7. **On-device storage** — all sessions stored locally. Sessions are timestamped, manually nameable, exportable as JSON, and re-importable.
+8. **Minimal settings** — ping interval, timeout, and payload size (1/2/3 bytes).
 
-- **BLE Connection** — Connect to a MeshCore node via Web Bluetooth and pull contact lists directly from the device.
-- **Ping Sessions** — Run automated ping tests against a contact, recording RTT (round-trip time) and SNR (signal-to-noise ratio) for each attempt.
-- **GPS Tracking** — Optionally log device GPS coordinates alongside each ping for geospatial analysis.
-- **Heatmap Visualization** — View session data on an interactive canvas map. Compare two sessions side-by-side (SNR or RTT overlays).
-- **Session Management** — Rename, export (JSON), import, or delete sessions. Bulk export all data from Settings.
-- **Offline PWA** — Installable on mobile/desktop. Works fully offline via Service Worker caching.
+## Use cases
 
-## How It Works
+- **Antenna testing** — swap antennas on a repeater or companion, run a session on each, then compare heatmaps side-by-side.
+- **Wardriving** — drive around with GPS enabled and a repeater in range to map real-world coverage.
+- **Node placement** — walk a site while pinging to find dead zones and optimal placement.
 
-1. Open the app on a Bluetooth-capable device (Chrome/Edge on desktop or Android).
-2. Tap **Connect** and pair with your MeshCore node.
-3. Contacts are loaded from the node. Tap a contact to open a session.
-4. Press **Start** to begin pinging. Each ping sends a raw data packet and waits for a response.
-5. Data is saved per session in local storage. Switch to the **Heatmap** tab to visualize.
-6. Enable **GPS** to attach location data to each ping.
+## How it's built
 
-## Hosting on GitHub Pages
-
-This is a fully static site with no build step — just HTML, CSS, JS, and JSON.
-
-### 1. Push to GitHub
-
-```bash
-cd meshcore-heatmapper
-git init
-git add .
-git commit -m "Initial commit"
-git remote add origin https://github.com/<your-username>/meshcore-heatmapper.git
-git push -u origin main
-```
-
-### 2. Enable GitHub Pages
-
-1. Go to your repo on GitHub → **Settings** → **Pages**.
-2. Under **Branch**, select `main` and `/ (root)`, then click **Save**.
-3. Wait ~30 seconds. Your site will be live at:
-
-```
-https://<your-username>.github.io/meshcore-heatmapper/
-```
-
-That's it — no CI, no build, no config needed.
-
-## Files
-
-| File | Purpose |
-|---|---|
-| `index.html` | The entire app (HTML, CSS, JS bundled in one file) |
-| `manifest.json` | PWA manifest for install prompts + icons |
-| `sw.js` | Service Worker for offline caching |
-| `icon-192.png` / `icon-512.png` | PWA icons (you'll need to provide these) |
+- Single `index.html` with all HTML, CSS, and JS inline — no framework, no build step.
+- PWA via `manifest.json` + Service Worker (`sw.js`) for offline use and installability.
+- Mobile-first responsive design with a dark UI.
+- Web Bluetooth API for BLE communication with MeshCore nodes.
+- Canvas 2D for heatmap rendering.
+- IndexedDB for local session storage.
 
 ## Requirements
 
-- A browser with Web Bluetooth support (Chrome/Edge on desktop, Chrome on Android).
+- Chrome or Edge (desktop or Android) — Web Bluetooth is required, Safari/Firefox do not support it.
 - A [MeshCore](https://meshcore.co/) node within BLE range.
 
 ## License
