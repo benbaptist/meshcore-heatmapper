@@ -233,9 +233,11 @@ button{touch-action:manipulation;cursor:pointer}
         </p>
       </div>
       <div class="card" id="node-list-card" style="display:none">
-        <h3>📡 Mesh Nodes</h3>
-        <p style="font-size:12px;color:var(--fg3)">Select a repeater to range test:</p>
-        <div id="node-list" style="display:flex;flex-direction:column;gap:6px;margin-top:8px"></div>
+        <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+          <h3 style="margin:0">📡 Contacts</h3>
+          <button class="btn btn-outline btn-sm" id="btn-refresh-contacts" onclick="app._requestNodeList()" disabled>🔄 Refresh</button>
+        </div>
+        <div id="node-list" style="display:flex;flex-direction:column;gap:6px"></div>
       </div>
     </div>
 
@@ -303,38 +305,10 @@ button{touch-action:manipulation;cursor:pointer}
     <!-- SETTINGS PANEL -->
     <div class="panel" id="panel-settings">
       <div class="card">
-        <h3>⚙️ BLE Settings</h3>
-        <div class="setting-row">
-          <div class="info"><span class="label">Device Name Filter</span><span class="desc">BLE advertisement name contains</span></div>
-          <input class="input" id="set-device-filter" value="MeshCore" style="width:120px">
-        </div>
-        <div class="setting-row">
-          <div class="info"><span class="label">Service UUID</span><span class="desc">BLE GATT service</span></div>
-          <input class="input" id="set-service-uuid" value="6e400001-b5a3-f393-e0a9-e50e24dcca9e" style="width:200px;font-size:11px">
-        </div>
-        <div class="setting-row">
-          <div class="info"><span class="label">TX Characteristic</span><span class="desc">Write commands here</span></div>
-          <input class="input" id="set-tx-uuid" value="6e400002-b5a3-f393-e0a9-e50e24dcca9e" style="width:200px;font-size:11px">
-        </div>
-        <div class="setting-row">
-          <div class="info"><span class="label">RX Characteristic</span><span class="desc">Read responses here</span></div>
-          <input class="input" id="set-rx-uuid" value="6e400003-b5a3-f393-e0a9-e50e24dcca9e" style="width:200px;font-size:11px">
-        </div>
-      </div>
-      <div class="card">
         <h3>📶 Ping Settings</h3>
         <div class="setting-row">
           <div class="info"><span class="label">Ping Interval (ms)</span><span class="desc">Delay between pings</span></div>
           <input class="input" type="number" id="set-ping-interval" value="1000" min="200" max="10000" step="100" style="width:90px">
-        </div>
-        <div class="setting-row">
-          <div class="info"><span class="label">Ping Size</span><span class="desc">Payload bytes (smaller = less airtime)</span></div>
-          <select class="select" id="set-ping-size" style="width:100px">
-            <option value="1">1 byte</option>
-            <option value="2">2 bytes</option>
-            <option value="3" selected>3 bytes</option>
-            <option value="8">8 bytes</option>
-          </select>
         </div>
         <div class="setting-row">
           <div class="info"><span class="label">Ping Timeout (ms)</span><span class="desc">Wait before declaring loss</span></div>
@@ -430,9 +404,45 @@ function showModal(title, bodyEl, onConfirm) {
   $('#modal-container').append(overlay);
 }
 
-// ═══════════════════════════════════════════════════
-// IndexedDB Storage
-// ═══════════════════════════════════════════════════
+// ── Binary Buffer Helpers ──
+function bufWriter() {
+  const chunks = [];
+  return {
+    byte(v) { chunks.push(new Uint8Array([v & 0xff])); return this; },
+    uint16(v) { const b = new Uint8Array(2); new DataView(b.buffer).setUint16(0, v, true); chunks.push(b); return this; },
+    uint32(v) { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, v, true); chunks.push(b); return this; },
+    int32(v) { const b = new Uint8Array(4); new DataView(b.buffer).setInt32(0, v, true); chunks.push(b); return this; },
+    bytes(arr) { chunks.push(new Uint8Array(arr)); return this; },
+    cstring(s, len) { const b = new Uint8Array(len); const enc = new TextEncoder().encode(s); b.set(enc.subarray(0, Math.min(enc.length, len))); chunks.push(b); return this; },
+    build() { const total = chunks.reduce((s, c) => s + c.length, 0); const out = new Uint8Array(total); let off = 0; chunks.forEach(c => { out.set(c, off); off += c.length; }); return out; }
+  };
+}
+function bufReader(bytes) {
+  let off = 0; const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return {
+    byte() { return bytes[off++]; },
+    uint16() { const r = v.getUint16(off, true); off += 2; return r; },
+    uint32() { const r = v.getUint32(off, true); off += 4; return r; },
+    int32() { const r = v.getInt32(off, true); off += 4; return r; },
+    int8() { const r = v.getInt8(off); off += 1; return r; },
+    bytes(n) { const r = bytes.slice(off, off + n); off += n; return r; },
+    cstring(n) { let end = off; while (end < off + n && bytes[end] !== 0) end++; const r = new TextDecoder().decode(bytes.slice(off, end)); off += n; return r; },
+    remaining() { return bytes.slice(off); },
+    hasRemaining() { return off < bytes.length; }
+  };
+}
+
+// ── MeshCore Protocol Constants ──
+const MC = {
+  BLE_SVC:  '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
+  BLE_TX:   '6e400003-b5a3-f393-e0a9-e50e24dcca9e', // device→app (we read)
+  BLE_RX:   '6e400002-b5a3-f393-e0a9-e50e24dcca9e', // app→device (we write)
+  CMD: { AppStart:1, GetContacts:4, SendRawData:25, SendTracePath:36 },
+  RSP: { Ok:0, Err:1, ContactsStart:2, Contact:3, EndOfContacts:4, SelfInfo:5, Sent:6 },
+  PSH: { LogRxData:0x88, TraceData:0x89 },
+  ADV_TYPE: { None:0, Chat:1, Repeater:2, Room:3 },
+  ADV_TYPE_LABEL: { 0:'Unknown', 1:'Chat', 2:'Repeater', 3:'Room' },
+};
 class StorageManager {
   constructor() {
     this._db = null;
@@ -515,27 +525,21 @@ class StorageManager {
 }
 
 // ═══════════════════════════════════════════════════
-// BLE Manager
+// BLE Manager (MeshCore binary protocol)
 // ═══════════════════════════════════════════════════
 class BLEManager {
   constructor() {
-    this.device = null;
-    this.server = null;
-    this.service = null;
-    this.txChar = null;
-    this.rxChar = null;
-    this.connected = false;
-    this._listeners = new Set();
-    this.onDisconnect = null;
-    this._rxBuffer = '';
+    this.device = null; this.server = null; this.txChar = null; this.rxChar = null;
+    this.connected = false; this.onDisconnect = null;
+    this._frameHandlers = []; // [{code, once, fn}]
+    this._writeLock = false;
   }
 
-  async scan(filterName = 'MeshCore') {
+  async scan() {
     try {
       const device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: filterName }],
-        optionalServices: [app.getSetting('serviceUuid')],
-        acceptAllDevices: !filterName,
+        filters: [{ services: [MC.BLE_SVC] }],
+        optionalServices: [MC.BLE_SVC],
       });
       return device;
     } catch (err) {
@@ -547,56 +551,62 @@ class BLEManager {
   async connect(device) {
     this.device = device;
     this.device.addEventListener('gattserverdisconnected', () => this._handleDisconnect());
-
     this.server = await device.gatt.connect();
-    this.service = await this.server.getPrimaryService(app.getSetting('serviceUuid'));
-    this.txChar = await this.service.getCharacteristic(app.getSetting('txUuid'));
-    this.rxChar = await this.service.getCharacteristic(app.getSetting('rxUuid'));
-
+    const svc = await this.server.getPrimaryService(MC.BLE_SVC);
+    // We write to RX characteristic (device reads from it)
+    this.txChar = await svc.getCharacteristic(MC.BLE_RX);
+    // We read from TX characteristic (device writes to it)
+    this.rxChar = await svc.getCharacteristic(MC.BLE_TX);
     await this.rxChar.startNotifications();
-    this.rxChar.addEventListener('characteristicvaluechanged', (e) => this._onRx(e.target.value));
-
+    this.rxChar.addEventListener('characteristicvaluechanged', (e) => this._onFrame(e.target.value));
     this.connected = true;
+    // Send AppStart to handshake
+    await this.sendCommand(MC.CMD.AppStart, bufWriter().byte(1).bytes(new Uint8Array(6)).cstring('heatmapper', 32).build());
     return true;
   }
 
   async disconnect() {
-    if (this.device && this.device.gatt.connected) {
-      await this.device.gatt.disconnect();
-    }
+    if (this.device && this.device.gatt.connected) await this.device.gatt.disconnect();
     this._reset();
   }
 
   _reset() {
-    this.connected = false;
-    this.server = null;
-    this.service = null;
-    this.txChar = null;
-    this.rxChar = null;
-    this.device = null;
-    this._rxBuffer = '';
-    this._listeners.clear();
+    this.connected = false; this.server = null; this.txChar = null; this.rxChar = null;
+    this.device = null; this._frameHandlers = []; this._writeLock = false;
   }
 
-  addListener(fn) { this._listeners.add(fn); }
-  removeListener(fn) { this._listeners.delete(fn); }
-
-  async send(data) {
+  /** Send a binary command frame: [code, ...payload] */
+  async sendCommand(code, payload = new Uint8Array()) {
     if (!this.txChar) throw new Error('Not connected');
-    const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
-    await this.txChar.writeValueWithoutResponse(bytes);
+    const frame = new Uint8Array(1 + payload.length);
+    frame[0] = code; frame.set(payload, 1);
+    // Serialize writes to avoid GATT-already-in-progress errors
+    while (this._writeLock) await new Promise(r => setTimeout(r, 5));
+    this._writeLock = true;
+    try { await this.txChar.writeValueWithoutResponse(frame); }
+    finally { this._writeLock = false; }
   }
 
-  _onRx(value) {
-    const text = new TextDecoder().decode(value);
-    this._rxBuffer += text;
-    const lines = this._rxBuffer.split('\n');
-    this._rxBuffer = lines.pop();
-    for (const line of lines) {
-      if (line.trim()) {
-        for (const listener of this._listeners) {
-          try { listener(line.trim()); } catch (e) { /* ignore */ }
-        }
+  /** Register a handler for a specific response/push code byte */
+  onFrame(code, fn, once = false) {
+    this._frameHandlers.push({ code, fn, once });
+  }
+
+  /** Remove a specific handler */
+  offFrame(fn) {
+    this._frameHandlers = this._frameHandlers.filter(h => h.fn !== fn);
+  }
+
+  _onFrame(value) {
+    const bytes = new Uint8Array(value.buffer);
+    const code = bytes[0];
+    const payload = bytes.slice(1);
+    // Dispatch to matching handlers
+    const handlers = [...this._frameHandlers]; // copy since handlers may mutate array
+    for (const h of handlers) {
+      if (h.code === code || h.code === null) {
+        try { h.fn(code, payload); } catch (e) { /* ignore */ }
+        if (h.once) this.offFrame(h.fn);
       }
     }
   }
@@ -604,6 +614,100 @@ class BLEManager {
   _handleDisconnect() {
     this._reset();
     if (this.onDisconnect) this.onDisconnect();
+  }
+
+  /** Fetch contacts from the connected device. Returns array of {publicKey, type, flags, advName, lastAdvert, advLat, advLon, outPathLen, outPath} */
+  async getContacts() {
+    return new Promise((resolve, reject) => {
+      const contacts = [];
+      let settled = false;
+
+      const timeout = setTimeout(() => {
+        if (!settled) { settled = true; cleanup(); resolve(contacts); }
+      }, 8000);
+
+      const onContact = (code, payload) => {
+        const r = bufReader(payload);
+        contacts.push({
+          publicKey: r.bytes(32), type: r.byte(), flags: r.byte(),
+          outPathLen: r.byte(), outPath: r.bytes(64),
+          advName: r.cstring(32), lastAdvert: r.uint32(),
+          advLat: r.int32() / 1e7, advLon: r.int32() / 1e7,
+          lastMod: r.uint32(),
+        });
+      };
+
+      const onEnd = () => { settled = true; cleanup(); resolve(contacts); };
+      const onErr = () => { settled = true; cleanup(); reject(new Error('GetContacts failed')); };
+
+      const cleanup = () => {
+        clearTimeout(timeout);
+        this.offFrame(onContact); this.offFrame(onEnd); this.offFrame(onErr);
+      };
+
+      this.onFrame(MC.RSP.Contact, onContact);
+      this.onFrame(MC.RSP.EndOfContacts, onEnd, true);
+      this.onFrame(MC.RSP.Err, onErr, true);
+
+      this.sendCommand(MC.CMD.GetContacts).catch((e) => { settled = true; cleanup(); reject(e); });
+    });
+  }
+
+  /**
+   * Trace a path and get per-hop SNR.
+   * @param {Uint8Array} path - array of 1-byte path hashes
+   * @param {number} timeoutMs
+   * @returns {{pathSnrs: number[], lastSnr: number}}
+   */
+  async tracePath(path, timeoutMs = 5000) {
+    return new Promise((resolve, reject) => {
+      const tag = (Math.random() * 0xffffffff) >>> 0;
+      let settled = false;
+
+      // Failsafe timeout in case BLE disconnects before we get any response
+      const failsafe = setTimeout(() => settle(new Error('timeout')), timeoutMs + 15000);
+
+      const onSent = (code, payload) => {
+        const r = bufReader(payload);
+        const result = r.int8();
+        if (result !== 0) { settle(new Error('Trace rejected')); return; }
+        r.uint32(); // ackCrc
+        const estTimeout = r.uint32();
+        // Use device-reported timeout + our extra
+        setTimeout(() => settle(new Error('timeout')), estTimeout + timeoutMs);
+      };
+
+      const onTraceData = (code, payload) => {
+        const r = bufReader(payload);
+        r.byte(); // reserved
+        const pathLen = r.byte();
+        r.byte(); // flags
+        const respTag = r.uint32();
+        if (respTag !== tag) return;
+        r.uint32(); // authCode
+        r.bytes(pathLen); // pathHashes
+        const pathSnrsRaw = r.bytes(pathLen);
+        const lastSnr = r.int8() / 4;
+        const pathSnrs = Array.from(pathSnrsRaw).map(b => b / 4);
+        settle({ pathSnrs, lastSnr, pathLen });
+      };
+
+      const onErr = () => { settle(new Error('Trace error')); };
+
+      const settle = (result) => {
+        if (settled) return; settled = true;
+        clearTimeout(failsafe);
+        this.offFrame(onSent); this.offFrame(onTraceData); this.offFrame(onErr);
+        if (result instanceof Error) reject(result); else resolve(result);
+      };
+
+      this.onFrame(MC.RSP.Sent, onSent, true);
+      this.onFrame(MC.PSH.TraceData, onTraceData);
+      this.onFrame(MC.RSP.Err, onErr, true);
+
+      const payload = bufWriter().uint32(tag).uint32(0).byte(0).bytes(path).build();
+      this.sendCommand(MC.CMD.SendTracePath, payload).catch(reject);
+    });
   }
 }
 
@@ -650,56 +754,29 @@ class GPSTracker {
 }
 
 // ═══════════════════════════════════════════════════
-// Ping Engine
+// Ping Engine (MeshCore tracePath protocol)
 // ═══════════════════════════════════════════════════
 class PingEngine {
   constructor(ble, gps, storage) {
-    this.ble = ble;
-    this.gps = gps;
-    this.storage = storage;
-    this.running = false;
-    this.seq = 0;
-    this.sent = 0;
-    this.replies = 0;
-    this.records = [];
-    this.targetNodeId = null;
-    this.targetNodeName = '';
-    this.sessionName = '';
-    this.sessionId = null;
-    this.onUpdate = null;
-    this.onPingResult = null;
-    this._timer = null;
-    this._pendingSeq = null;
-    this._pingTimeout = null;
+    this.ble = ble; this.gps = gps; this.storage = storage;
+    this.running = false; this.seq = 0; this.sent = 0; this.replies = 0;
+    this.records = []; this.targetContact = null; this.sessionName = '';
+    this.sessionId = null; this.onUpdate = null; this.onPingResult = null;
+    this._timer = null; this._startTime = 0;
   }
 
-  start(targetNodeId, targetNodeName, sessionName = '') {
-    this.targetNodeId = targetNodeId;
-    this.targetNodeName = targetNodeName;
-    this.sessionName = sessionName || `Test ${targetNodeName} — ${new Date().toLocaleString()}`;
+  start(contact, sessionName = '') {
+    this.targetContact = contact;
+    this.sessionName = sessionName || `Test ${contact.advName} — ${new Date().toLocaleString()}`;
     this.sessionId = crypto.randomUUID();
-    this.seq = 0;
-    this.sent = 0;
-    this.replies = 0;
-    this.records = [];
-    this.running = true;
-
-    // Listen for incoming data
-    this._dataHandler = (line) => this._parseResponse(line);
-    this.ble.addListener(this._dataHandler);
-
+    this.seq = 0; this.sent = 0; this.replies = 0; this.records = [];
+    this.running = true; this._startTime = Date.now();
     this._schedulePing();
     if (this.onUpdate) this.onUpdate();
   }
 
   stop() {
-    this.running = false;
-    clearTimeout(this._timer);
-    clearTimeout(this._pingTimeout);
-    if (this._dataHandler) {
-      this.ble.removeListener(this._dataHandler);
-      this._dataHandler = null;
-    }
+    this.running = false; clearTimeout(this._timer);
     return this._buildSession();
   }
 
@@ -707,71 +784,41 @@ class PingEngine {
     if (!this.running) return;
     const maxPings = parseInt(app.getSetting('maxPings'));
     if (maxPings > 0 && this.sent >= maxPings) { this.stop(); toast('Max pings reached'); return; }
-
     const interval = parseInt(app.getSetting('pingInterval'));
     this._timer = setTimeout(() => this._sendPing(), interval);
   }
 
   async _sendPing() {
     if (!this.running || !this.ble.connected) return;
-    this.seq++;
-    this.sent++;
+    this.seq++; this.sent++;
+    const seq = this.seq;
+    const t0 = Date.now();
 
-    const pingSize = parseInt(app.getSetting('pingSize'));
-    // Build ping command: simple protocol
-    // Format: PING:<target_id>:<seq>:<size>\n
-    const cmd = `PING:${this.targetNodeId}:${this.seq}:${pingSize}\n`;
-    this._pendingSeq = this.seq;
+    // Build path from contact's outPath
+    const pathLen = this.targetContact.outPathLen || 1;
+    let path;
+    if (pathLen > 0 && this.targetContact.outPath.some(b => b !== 0)) {
+      path = this.targetContact.outPath.slice(0, pathLen);
+    } else {
+      // Fallback: use first byte of public key as path
+      path = this.targetContact.publicKey.slice(0, 1);
+    }
 
     try {
-      await this.ble.send(cmd);
+      const result = await this.ble.tracePath(path, parseInt(app.getSetting('pingTimeout')));
+      const latency = Date.now() - t0;
+      // pathSnrs[0] = SNR heard by the repeater (forward direction)
+      // lastSnr = SNR heard by us on return
+      const snrSent = result.pathSnrs.length > 0 ? result.pathSnrs[0] : null;
+      const snrRecv = result.lastSnr;
+      const hops = result.pathLen;
+      this._recordPing({ snrSent, snrRecv, hops, latency }, 'ok');
     } catch (err) {
-      console.error('Send error:', err);
-      this._recordPing(null, 'send_error');
+      const latency = Date.now() - t0;
+      this._recordPing(null, err.message === 'timeout' ? 'timeout' : 'send_error');
     }
 
-    // Set timeout
-    const timeout = parseInt(app.getSetting('pingTimeout'));
-    this._pingTimeout = setTimeout(() => {
-      if (this._pendingSeq === this.seq) {
-        this._pendingSeq = null;
-        this._recordPing(null, 'timeout');
-        this._schedulePing();
-      }
-    }, timeout);
-  }
-
-  _parseResponse(line) {
-    // Expect format: PONG:<target_id>:<seq>:<snr_sent>:<rssi_sent>:<snr_recv>:<rssi_recv>:<hops>
-    // or simpler: PONG:<seq>:<snr>:<rssi>
-    if (!line.startsWith('PONG:')) return;
-    const parts = line.split(':');
-    let seq, snrSent, rssiSent, snrRecv, rssiRecv, hops;
-
-    if (parts.length >= 5) {
-      // Full format: PONG:target:seq:snr_sent:rssi_sent:snr_recv:rssi_recv:hops
-      seq = parseInt(parts[2]);
-      snrSent = parseFloat(parts[3]);
-      rssiSent = parseInt(parts[4]);
-      snrRecv = parseFloat(parts[5]);
-      rssiRecv = parts.length > 6 ? parseInt(parts[6]) : 0;
-      hops = parts.length > 7 ? parseInt(parts[7]) : 1;
-    } else {
-      // Simple format: PONG:seq:snr:rssi
-      seq = parseInt(parts[1]);
-      snrRecv = parseFloat(parts[2]);
-      rssiRecv = parseInt(parts[3]);
-      snrSent = null;
-      rssiSent = null;
-      hops = 1;
-    }
-
-    if (seq === this._pendingSeq) {
-      clearTimeout(this._pingTimeout);
-      this._pendingSeq = null;
-      this._recordPing({ snrSent, rssiSent, snrRecv, rssiRecv, hops, latency: 0 }, 'ok');
-      this._schedulePing();
-    }
+    this._schedulePing();
   }
 
   _recordPing(data, status) {
@@ -785,16 +832,12 @@ class PingEngine {
       gpsAccuracy: gps ? gps.accuracy : null,
       altitude: gps ? gps.altitude : null,
       snrSent: data ? data.snrSent : null,
-      rssiSent: data ? data.rssiSent : null,
       snrRecv: data ? data.snrRecv : null,
-      rssiRecv: data ? data.rssiRecv : null,
       hops: data ? data.hops : null,
       latency: data ? data.latency : null,
     };
-
     if (status === 'ok') this.replies++;
     this.records.push(record);
-
     if (this.onPingResult) this.onPingResult(record);
     if (this.onUpdate) this.onUpdate();
   }
@@ -804,12 +847,11 @@ class PingEngine {
       id: this.sessionId,
       name: this.sessionName,
       createdAt: Date.now(),
-      targetNodeId: this.targetNodeId,
-      targetNodeName: this.targetNodeName,
+      targetNodeId: this.targetContact ? Array.from(this.targetContact.publicKey.slice(0, 8)).map(b => b.toString(16).padStart(2,'0')).join('') : '',
+      targetNodeName: this.targetContact ? this.targetContact.advName : 'Unknown',
       records: this.records,
       settings: {
         pingInterval: app.getSetting('pingInterval'),
-        pingSize: app.getSetting('pingSize'),
         pingTimeout: app.getSetting('pingTimeout'),
       },
     };
@@ -821,8 +863,7 @@ class PingEngine {
       ? ok.reduce((s, r) => s + ((r.snrRecv || 0) + (r.snrSent || r.snrRecv || 0)) / 2, 0) / ok.length
       : null;
     return {
-      sent: this.sent,
-      replies: this.replies,
+      sent: this.sent, replies: this.replies,
       loss: this.sent > 0 ? ((this.sent - this.replies) / this.sent * 100).toFixed(1) : 0,
       avgSnr: avgSnr !== null ? avgSnr.toFixed(1) : null,
     };
@@ -974,12 +1015,7 @@ class App {
   // ── Settings ──
   _loadSettings() {
     const defaults = {
-      deviceFilter: 'MeshCore',
-      serviceUuid: '6e400001-b5a3-f393-e0a9-e50e24dcca9e',
-      txUuid: '6e400002-b5a3-f393-e0a9-e50e24dcca9e',
-      rxUuid: '6e400003-b5a3-f393-e0a9-e50e24dcca9e',
       pingInterval: '1000',
-      pingSize: '3',
       pingTimeout: '5000',
       maxPings: '0',
       gpsAccurate: true,
@@ -1002,12 +1038,7 @@ class App {
 
   _saveSettings() {
     const settings = {
-      deviceFilter: $('#set-device-filter').value,
-      serviceUuid: $('#set-service-uuid').value,
-      txUuid: $('#set-tx-uuid').value,
-      rxUuid: $('#set-rx-uuid').value,
       pingInterval: $('#set-ping-interval').value,
-      pingSize: $('#set-ping-size').value,
       pingTimeout: $('#set-ping-timeout').value,
       maxPings: $('#set-max-pings').value,
       gpsAccurate: $('#set-gps-accurate').checked,
@@ -1018,12 +1049,7 @@ class App {
 
   getSetting(key) {
     const elMap = {
-      deviceFilter: 'set-device-filter',
-      serviceUuid: 'set-service-uuid',
-      txUuid: 'set-tx-uuid',
-      rxUuid: 'set-rx-uuid',
       pingInterval: 'set-ping-interval',
-      pingSize: 'set-ping-size',
       pingTimeout: 'set-ping-timeout',
       maxPings: 'set-max-pings',
       gpsAccurate: 'set-gps-accurate',
@@ -1063,10 +1089,10 @@ class App {
   async scan() {
     $('#btn-scan').disabled = true;
     $('#btn-scan').textContent = 'Scanning...';
-    $('#device-list').innerHTML = '<p style="font-size:13px;color:var(--fg2);text-align:center;padding:20px">Searching for devices...</p>';
+    $('#device-list').innerHTML = '<p style="font-size:13px;color:var(--fg2);text-align:center;padding:20px">Searching for MeshCore BLE devices...</p>';
 
     try {
-      const device = await this.ble.scan(this.getSetting('deviceFilter'));
+      const device = await this.ble.scan();
       if (!device) {
         $('#device-list').innerHTML = '<p style="font-size:13px;color:var(--fg2);text-align:center;padding:20px">No devices found. Make sure your MeshCore node is powered on and advertising.</p>';
         $('#btn-scan').disabled = false;
@@ -1126,73 +1152,68 @@ class App {
   _updateBLEStatus(connected, name = '') {
     const status = $('#ble-status');
     const text = $('#ble-status-text');
+    const refreshBtn = $('#btn-refresh-contacts');
     if (connected) {
       status.className = 'status-bar connected';
       text.textContent = `Connected to ${name}`;
+      if (refreshBtn) refreshBtn.disabled = false;
     } else {
       status.className = 'status-bar disconnected';
       text.textContent = 'Disconnected';
+      if (refreshBtn) refreshBtn.disabled = true;
     }
   }
 
   async _requestNodeList() {
-    // Send command to get node list from MeshCore
+    $('#node-list').innerHTML = '<p style="font-size:13px;color:var(--fg2);text-align:center;padding:20px">Loading contacts from device...</p>';
+    $('#node-list-card').style.display = 'block';
+
     try {
-      await this.ble.send('NODES\n');
+      const contacts = await this.ble.getContacts();
+      this._renderContacts(contacts);
     } catch (err) {
-      console.error('Failed to request nodes:', err);
-    }
-
-    // Listen for node list response
-    const nodeListHandler = (line) => {
-      if (line.startsWith('NODES:') || (line.startsWith('[') && line.endsWith(']')) || (line.startsWith('{') && line.endsWith('}'))) {
-        this._parseNodeList(line);
-        this.ble.removeListener(nodeListHandler);
-      }
-    };
-    this.ble.addListener(nodeListHandler);
-    // Auto-remove after 5 seconds
-    setTimeout(() => this.ble.removeListener(nodeListHandler), 5000);
-
-    // Also allow manual entry
-    this._showManualNodeEntry();
-  }
-
-  _parseNodeList(data) {
-    try {
-      let nodes = [];
-      if (data.startsWith('NODES:')) {
-        const json = data.substring(6);
-        nodes = JSON.parse(json);
-      } else {
-        nodes = JSON.parse(data);
-      }
-
-      if (Array.isArray(nodes) && nodes.length > 0) {
-        this._renderNodeList(nodes);
-      }
-    } catch (e) {
-      // Not JSON, try line parsing
-      const lines = data.split('\n').filter(l => l.trim());
-      if (lines.length > 0) {
-        const nodes = lines.map((l, i) => ({ id: l.trim(), name: l.trim(), shortName: l.trim().substring(0, 8) }));
-        this._renderNodeList(nodes);
-      }
+      console.error('GetContacts error:', err);
+      // Fallback: allow manual entry
+      this._showManualNodeEntry();
+      toast('Could not load contacts — enter node ID manually');
     }
   }
 
-  _renderNodeList(nodes) {
+  _renderContacts(contacts) {
     const container = $('#node-list');
     container.innerHTML = '';
-    nodes.forEach(n => {
+
+    if (contacts.length === 0) {
+      container.innerHTML = '<p style="font-size:13px;color:var(--fg3);text-align:center;padding:20px">No contacts on device yet. Mesh nodes will appear here once discovered.</p>';
+      this._showManualNodeEntry();
+      return;
+    }
+
+    // Sort: repeaters first, then by name
+    contacts.sort((a, b) => {
+      if (a.type !== b.type) return a.type === MC.ADV_TYPE.Repeater ? -1 : b.type === MC.ADV_TYPE.Repeater ? 1 : 0;
+      return a.advName.localeCompare(b.advName);
+    });
+
+    const now = Math.floor(Date.now() / 1000);
+    contacts.forEach(c => {
+      const typeLabel = MC.ADV_TYPE_LABEL[c.type] || 'Unknown';
+      const typeIcon = c.type === MC.ADV_TYPE.Repeater ? '📡' : c.type === MC.ADV_TYPE.Room ? '🏠' : '💬';
+      const hasPath = c.outPathLen > 0 && c.outPath.some(b => b !== 0);
+      const hasGPS = c.advLat !== 0 || c.advLon !== 0;
+      const ago = c.lastAdvert > 0 ? now - c.lastAdvert : null;
+      const agoStr = ago !== null ? (ago < 60 ? `${ago}s ago` : ago < 3600 ? `${Math.floor(ago/60)}m ago` : `${Math.floor(ago/3600)}h ago`) : 'never';
+
       const item = el('div', {
         className: 'device-item',
-        onClick: () => this._selectTarget(n)
+        onClick: () => this._selectTarget(c)
       },
-        el('div', { className: 'icon' }, '🔹'),
+        el('div', { className: 'icon' }, typeIcon),
         el('div', { className: 'info' },
-          el('div', { className: 'name' }, n.shortName || n.name || n.id),
-          el('div', { className: 'detail' }, `ID: ${n.id}`)
+          el('div', { className: 'name' }, c.advName || 'Unnamed'),
+          el('div', { className: 'detail' },
+            `${typeLabel}${hasPath ? ' · routed' : ''}${hasGPS ? ' · 📍' : ''} · ${agoStr}`
+          )
         )
       );
       container.appendChild(item);
@@ -1202,40 +1223,26 @@ class App {
 
   _showManualNodeEntry() {
     const container = $('#node-list');
-    if (container.children.length === 0) {
-      container.innerHTML = '';
-      const input = el('input', {
-        className: 'input',
-        placeholder: 'Enter target node ID manually',
-        style: 'margin-bottom:8px',
-        id: 'manual-node-id',
-      });
-      const nameInput = el('input', {
-        className: 'input',
-        placeholder: 'Node name (optional)',
-        style: 'margin-bottom:8px',
-        id: 'manual-node-name',
-      });
-      const btn = el('button', {
-        className: 'btn btn-primary btn-sm btn-block',
-        onClick: () => {
-          const id = $('#manual-node-id').value.trim();
-          const name = $('#manual-node-name').value.trim() || id;
-          if (id) this._selectTarget({ id, name, shortName: name });
-        }
-      }, 'Select This Node');
-      container.appendChild(input);
-      container.appendChild(nameInput);
-      container.appendChild(btn);
-      $('#node-list-card').style.display = 'block';
-    }
+    if (container.querySelector('#manual-node-id')) return;
+
+    const card = el('div', { style: 'margin-top:12px;padding-top:12px;border-top:1px solid var(--bg3)' },
+      el('input', { className: 'input', placeholder: 'Enter target node ID manually', style: 'margin-bottom:8px', id: 'manual-node-id' }),
+      el('input', { className: 'input', placeholder: 'Node name (optional)', style: 'margin-bottom:8px', id: 'manual-node-name' }),
+      el('button', { className: 'btn btn-primary btn-sm btn-block', onClick: () => {
+        const id = $('#manual-node-id').value.trim();
+        const name = $('#manual-node-name').value.trim() || id;
+        if (id) this._selectTarget({ publicKey: new TextEncoder().encode(id.padEnd(32,'\0')).slice(0,32), advName: name, type: 2, outPathLen: 0, outPath: new Uint8Array(64), advLat: 0, advLon: 0, lastAdvert: 0 });
+      }}, 'Select Manual Node')
+    );
+    container.appendChild(card);
+    $('#node-list-card').style.display = 'block';
   }
 
-  _selectTarget(node) {
-    this._selectedTarget = node;
-    $('#test-target-label').textContent = `Target: ${node.shortName || node.name || node.id}`;
+  _selectTarget(contact) {
+    this._selectedTarget = contact;
+    $('#test-target-label').textContent = `Target: ${contact.advName || 'Node'} (${MC.ADV_TYPE_LABEL[contact.type] || '?'})`;
     $('#btn-start-test').disabled = !this.ble.connected;
-    toast(`Selected: ${node.shortName || node.name || node.id}`);
+    toast(`Selected: ${contact.advName || 'Node'}`);
     this.switchPanel('test');
   }
 
@@ -1279,7 +1286,8 @@ class App {
     if (!this._selectedTarget) { toast('Select a target node first'); return; }
     if (!this.ble.connected) { toast('Not connected to BLE'); return; }
 
-    const sessionName = prompt('Session name (optional):', this._selectedTarget.shortName || this._selectedTarget.name);
+    const contact = this._selectedTarget;
+    const sessionName = prompt('Session name (optional):', contact.advName || 'Range Test');
     if (sessionName === null) return; // cancelled
 
     // Start GPS
@@ -1290,7 +1298,7 @@ class App {
     $('#btn-stop-test').style.display = '';
     $('#ping-display').innerHTML = '<p style="font-size:13px;color:var(--fg2);text-align:center;padding:20px">Waiting for first ping...</p>';
 
-    this.ping.start(this._selectedTarget.id, this._selectedTarget.shortName || this._selectedTarget.name, sessionName);
+    this.ping.start(contact, sessionName);
 
     // Keep screen on during test
     if ('wakeLock' in navigator) {
