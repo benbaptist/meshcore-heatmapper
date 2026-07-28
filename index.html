@@ -5,142 +5,241 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#0a0f1e">
 <title>MeshCore Heatmapper</title>
 <link rel="manifest" href="manifest.json">
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   :root{
-    --bg:#0f172a;--surface:#1e293b;--surface2:#273449;--border:#334155;
-    --accent:#38bdf8;--accent2:#818cf8;--green:#4ade80;--red:#f87171;
-    --orange:#fb923c;--text:#e2e8f0;--muted:#94a3b8;
-    --radius:12px;--radius-sm:8px;
+    --bg:#0a0f1e;
+    --surface:#111827;
+    --surface2:#1a2332;
+    --surface3:#223044;
+    --border:#1e2d42;
+    --border2:#2a3f57;
+    --accent:#38bdf8;
+    --accent-dim:rgba(56,189,248,.12);
+    --accent2:#818cf8;
+    --accent2-dim:rgba(129,140,248,.12);
+    --green:#4ade80;
+    --green-dim:rgba(74,222,128,.12);
+    --red:#f87171;
+    --red-dim:rgba(248,113,113,.12);
+    --orange:#fb923c;
+    --yellow:#facc15;
+    --text:#e2e8f0;
+    --muted:#64748b;
+    --muted2:#94a3b8;
+    --radius:14px;
+    --radius-sm:9px;
+    --radius-xs:6px;
   }
-  html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:15px;line-height:1.5;overflow:hidden}
+  html,body{height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:15px;line-height:1.5;overflow:hidden}
 
-  /* Layout */
-  #app{display:flex;flex-direction:column;height:100dvh}
-  header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
-  header h1{font-size:1rem;font-weight:700;color:var(--accent)}
-  header h1 span{color:var(--muted);font-weight:400}
-  #ble-btn{margin-left:auto;padding:6px 14px;border-radius:20px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;font-size:.85rem;font-weight:600;transition:all .15s;white-space:nowrap}
-  #ble-btn:hover{background:var(--accent);color:var(--bg)}
-  #ble-btn.connected{border-color:var(--green);color:var(--green)}
-  #ble-btn.connected:hover{background:var(--green);color:var(--bg)}
-  #status-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
+  /* ── App shell ── */
+  #app{display:flex;flex-direction:column;height:100dvh;max-width:640px;margin:0 auto;width:100%}
+  header{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+  header .logo{display:flex;align-items:center;gap:8px;font-size:.95rem;font-weight:700;color:var(--text)}
+  header .logo svg{color:var(--accent)}
+  header h1{font-size:.95rem;font-weight:700}
+  header h1 em{color:var(--accent);font-style:normal}
+  #header-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+
+  /* Status dot */
+  #status-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .3s}
   #status-dot.connected{background:var(--green)}
   #status-dot.pinging{background:var(--accent);animation:pulse .8s ease-in-out infinite}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
 
+  /* Header buttons */
+  .hdr-btn{display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted2);cursor:pointer;font-size:.8rem;font-weight:600;transition:all .15s;white-space:nowrap}
+  .hdr-btn svg{flex-shrink:0}
+  .hdr-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .hdr-btn.active{border-color:var(--green);color:var(--green);background:var(--green-dim)}
+  .hdr-btn.accent{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+  .hdr-btn:disabled{opacity:.35;pointer-events:none}
+
+  /* Nav */
   nav{display:flex;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
-  nav button{flex:1;padding:10px 4px;border:none;background:transparent;color:var(--muted);font-size:.82rem;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+  nav button{flex:1;padding:10px 4px 9px;border:none;background:transparent;color:var(--muted);font-size:.72rem;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:4px}
+  nav button svg{opacity:.55;transition:opacity .15s}
   nav button.active{color:var(--accent);border-bottom-color:var(--accent)}
+  nav button.active svg{opacity:1}
 
+  /* Main */
   main{flex:1;overflow:hidden;position:relative}
-  .page{position:absolute;inset:0;overflow-y:auto;display:none;padding:12px}
-  .page.active{display:block}
+  .page{position:absolute;inset:0;display:none;overflow:hidden}
+  .page.active{display:flex;flex-direction:column}
+
+  /* Sub-views */
+  .sub-view{flex:1;display:none;overflow:hidden;flex-direction:column}
+  .sub-view.active{display:flex}
+
+  /* Scrollable / fixed content */
+  .scroll-content{flex:1;overflow-y:auto;padding:14px}
 
   /* Cards */
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px}
-  .card h2{font-size:.9rem;font-weight:600;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+  .card h2{font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.08em}
 
-  /* Session page */
-  #contact-list{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto}
-  .contact-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm);cursor:pointer;border:2px solid transparent;transition:border-color .15s}
-  .contact-item:hover{border-color:var(--accent)}
-  .contact-item.selected{border-color:var(--accent);background:rgba(56,189,248,.08)}
-  .contact-icon{width:32px;height:32px;border-radius:8px;background:rgba(56,189,248,.15);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
-  .contact-name{font-weight:600;font-size:.9rem}
-  .contact-type{font-size:.75rem;color:var(--muted)}
-
-  /* Ping status */
-  #session-status{display:flex;align-items:center;gap:12px;padding:14px;background:var(--surface2);border-radius:var(--radius-sm);margin-bottom:10px}
-  #ping-indicator{width:40px;height:40px;border-radius:50%;border:3px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;transition:border-color .3s}
-  #ping-indicator.idle{}
-  #ping-indicator.sending{border-color:var(--accent);animation:pulse .5s ease-in-out infinite}
-  #ping-indicator.received{border-color:var(--green)}
-  #ping-indicator.timeout{border-color:var(--red)}
-  .stat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
-  .stat-box{background:var(--surface2);border-radius:var(--radius-sm);padding:10px;text-align:center}
-  .stat-val{font-size:1.3rem;font-weight:700;color:var(--accent)}
-  .stat-label{font-size:.72rem;color:var(--muted);margin-top:2px}
-
-  /* Session controls */
-  .btn{padding:10px 20px;border-radius:var(--radius-sm);border:none;font-weight:600;cursor:pointer;font-size:.9rem;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
-  .btn-primary{background:var(--accent);color:var(--bg)}
-  .btn-primary:hover{filter:brightness(1.1)}
-  .btn-danger{background:var(--red);color:white}
-  .btn-danger:hover{filter:brightness(1.1)}
-  .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
-  .btn-secondary:hover{background:var(--border)}
-  .btn:disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
+  /* Buttons */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 18px;border-radius:var(--radius-sm);border:none;font-weight:600;cursor:pointer;font-size:.88rem;transition:all .15s;user-select:none}
+  .btn-primary{background:var(--accent);color:#0a0f1e}
+  .btn-primary:hover{filter:brightness(1.15)}
+  .btn-danger{background:var(--red);color:#fff}
+  .btn-danger:hover{filter:brightness(1.15)}
+  .btn-green{background:var(--green);color:#0a0f1e}
+  .btn-green:hover{filter:brightness(1.15)}
+  .btn-secondary{background:var(--surface3);color:var(--text);border:1px solid var(--border2)}
+  .btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+  .btn:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
+  .btn-sm{padding:7px 12px;font-size:.8rem;border-radius:var(--radius-xs)}
   .btn-row{display:flex;gap:8px;flex-wrap:wrap}
 
-  /* GPS */
-  #gps-status{font-size:.8rem;padding:4px 10px;border-radius:20px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);cursor:pointer;user-select:none}
-  #gps-status.active{border-color:var(--green);color:var(--green)}
+  /* ── Contact picker ── */
+  #view-picker{gap:10px;padding:12px 14px}
+  #view-picker-header{display:flex;align-items:center;gap:8px;flex-shrink:0}
+  #contact-count{font-size:.78rem;color:var(--muted);margin-left:auto}
+  #contact-list-scroll{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px}
+
+  .contact-item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:all .15s;flex-shrink:0}
+  .contact-item:hover{border-color:var(--accent);background:var(--accent-dim)}
+  .contact-icon{width:38px;height:38px;border-radius:var(--radius-xs);background:var(--surface3);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--muted2)}
+  .contact-item:hover .contact-icon{background:var(--accent-dim);color:var(--accent)}
+  .contact-info{flex:1;min-width:0}
+  .contact-name{font-weight:600;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .contact-type{font-size:.73rem;color:var(--muted);margin-top:1px}
+  .contact-arrow{color:var(--muted);flex-shrink:0;transition:transform .15s}
+  .contact-item:hover .contact-arrow{transform:translateX(2px);color:var(--accent)}
+
+  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--muted);text-align:center;padding:40px 20px;flex:1}
+  .empty-state svg{opacity:.25}
+  .empty-state p{font-size:.88rem;line-height:1.6}
+
+  /* ── Session detail ── */
+  #view-session{gap:8px;padding:10px 14px}
+
+  /* Back row */
+  #session-back-row{display:flex;align-items:center;gap:8px;flex-shrink:0}
+  #session-target-label{font-size:.88rem;font-weight:600;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* Status banner */
+  #status-banner{border-radius:var(--radius);padding:18px 16px;display:flex;align-items:center;gap:14px;flex-shrink:0;border:1px solid transparent;transition:background .35s,border-color .35s}
+  #status-banner.idle{background:var(--surface);border-color:var(--border)}
+  #status-banner.sending{background:rgba(56,189,248,.10);border-color:rgba(56,189,248,.25)}
+  #status-banner.received{background:var(--green-dim);border-color:rgba(74,222,128,.30)}
+  #status-banner.timeout{background:var(--red-dim);border-color:rgba(248,113,113,.35)}
+  #banner-icon{width:50px;height:50px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .35s}
+  #status-banner.idle #banner-icon{background:var(--surface3);color:var(--muted)}
+  #status-banner.sending #banner-icon{background:var(--accent-dim);color:var(--accent);animation:pulse .5s ease-in-out infinite}
+  #status-banner.received #banner-icon{background:rgba(74,222,128,.18);color:var(--green)}
+  #status-banner.timeout #banner-icon{background:rgba(248,113,113,.15);color:var(--red)}
+  #banner-text{flex:1;min-width:0}
+  #banner-state{font-size:1.1rem;font-weight:700;line-height:1.2;transition:color .35s}
+  #status-banner.idle #banner-state{color:var(--muted2)}
+  #status-banner.sending #banner-state{color:var(--accent)}
+  #status-banner.received #banner-state{color:var(--green)}
+  #status-banner.timeout #banner-state{color:var(--red)}
+  #banner-target{font-size:.76rem;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #banner-count{text-align:right;flex-shrink:0}
+  #banner-count-num{font-size:1.9rem;font-weight:800;line-height:1;color:var(--text)}
+  #banner-count-label{font-size:.68rem;color:var(--muted);font-weight:500;margin-top:2px}
+
+  /* Stats row */
+  .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;flex-shrink:0}
+  .stat-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px;text-align:center}
+  .stat-val{font-size:1.2rem;font-weight:700;color:var(--accent);line-height:1.1}
+  .stat-label{font-size:.68rem;color:var(--muted);margin-top:2px;font-weight:500}
+
+  /* Session controls row */
+  #session-controls{display:flex;gap:8px;align-items:center;flex-shrink:0}
+  #session-name-input{flex:1;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:.88rem;outline:none;transition:border-color .15s}
+  #session-name-input:focus{border-color:var(--accent)}
+  #session-name-input::placeholder{color:var(--muted)}
 
   /* Ping log */
-  #ping-log{max-height:180px;overflow-y:auto;display:flex;flex-direction:column-reverse;gap:4px;font-size:.78rem;font-family:monospace}
-  .log-entry{padding:4px 8px;border-radius:4px;background:var(--surface2)}
-  .log-entry.ok{border-left:3px solid var(--green)}
-  .log-entry.timeout{border-left:3px solid var(--red)}
-  .snr-bar{display:inline-block;height:8px;background:var(--accent);border-radius:2px;vertical-align:middle;margin:0 4px}
+  #ping-log-panel{flex:1;overflow:hidden;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);min-height:0}
+  #ping-log-header{display:flex;align-items:center;gap:6px;padding:7px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+  #ping-log-header span{font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+  #ping-log-scroll{flex:1;overflow-y:auto;padding:5px 8px;display:flex;flex-direction:column;gap:3px}
+  .log-entry{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:var(--radius-xs);background:var(--surface2);font-size:.77rem;font-family:ui-monospace,'SF Mono',Menlo,monospace;flex-shrink:0}
+  .log-entry .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+  .log-entry.ok .dot{background:var(--green)}
+  .log-entry.timeout .dot{background:var(--red)}
+  .log-entry .time{color:var(--muted);flex-shrink:0}
+  .log-entry .rtt{color:var(--muted2);flex-shrink:0;min-width:52px}
+  .log-entry .snr-bar-track{flex:1;height:5px;background:var(--surface3);border-radius:3px;overflow:hidden;margin:0 4px}
+  .log-entry .snr-bar-fill{height:100%;border-radius:3px;transition:width .3s}
+  .log-entry .snr{color:var(--muted2);flex-shrink:0;text-align:right;min-width:48px}
+  .log-entry.timeout .rtt{color:var(--red)}
+  .log-empty{color:var(--muted);font-size:.8rem;text-align:center;padding:20px}
 
-  /* Heatmap page */
-  #heatmap-sessions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-  .session-chip{padding:6px 12px;border-radius:20px;background:var(--surface2);border:2px solid var(--border);cursor:pointer;font-size:.82rem;font-weight:600;transition:all .15s}
+  /* ── Heatmap page ── */
+  #page-heatmap{gap:8px;padding:10px 14px}
+  #heatmap-chips-row{display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;align-items:center}
+  #heatmap-hint{font-size:.78rem;color:var(--muted)}
+  .session-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;background:var(--surface2);border:2px solid var(--border);cursor:pointer;font-size:.78rem;font-weight:600;transition:all .15s;white-space:nowrap}
   .session-chip:hover{border-color:var(--accent)}
-  .session-chip.active-a{border-color:var(--accent);color:var(--accent)}
-  .session-chip.active-b{border-color:var(--accent2);color:var(--accent2)}
-  #map-wrap{position:relative;height:55vmax;max-height:460px;min-height:220px;border-radius:var(--radius);overflow:hidden;background:#162032;border:1px solid var(--border)}
-  #map-canvas{width:100%;height:100%;display:block;cursor:grab}
-  #map-canvas.panning{cursor:grabbing}
-  #map-legend{position:absolute;bottom:10px;right:10px;background:rgba(15,23,42,.85);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;font-size:.75rem}
-  .legend-row{display:flex;align-items:center;gap:6px;margin-bottom:3px}
-  .legend-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
-  #compare-label{position:absolute;top:8px;left:8px;background:rgba(15,23,42,.85);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 10px;font-size:.75rem;display:none}
-  .ab-tag{display:inline-block;width:14px;height:14px;border-radius:4px;font-size:.65rem;font-weight:700;text-align:center;line-height:14px}
+  .session-chip.active-a{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+  .session-chip.active-b{border-color:var(--accent2);color:var(--accent2);background:var(--accent2-dim)}
+  .ab-tag{display:inline-flex;width:14px;height:14px;border-radius:4px;font-size:.62rem;font-weight:800;text-align:center;align-items:center;justify-content:center;flex-shrink:0}
   .ab-tag.a{background:var(--accent);color:var(--bg)}
   .ab-tag.b{background:var(--accent2);color:var(--bg)}
-  .map-toolbar{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center}
-  #no-data-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.9rem;pointer-events:none}
 
-  /* Sessions list page */
-  .session-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius-sm);margin-bottom:6px;cursor:pointer;border:1px solid transparent}
-  .session-row:hover{border-color:var(--accent)}
-  .session-row .name{font-weight:600;flex:1;font-size:.9rem}
-  .session-row .meta{font-size:.75rem;color:var(--muted)}
-  .session-row .actions{display:flex;gap:6px}
-  .icon-btn{background:none;border:none;cursor:pointer;color:var(--muted);font-size:1rem;padding:4px;border-radius:4px;transition:color .15s}
-  .icon-btn:hover{color:var(--text)}
+  #map-toolbar{display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap}
+  #map-toolbar-spacer{flex:1}
 
-  /* Settings page */
+  #map-wrap{flex:1;position:relative;border-radius:var(--radius);overflow:hidden;background:#0d1526;border:1px solid var(--border);min-height:160px}
+  #map-canvas{width:100%;height:100%;display:block;cursor:grab}
+  #map-canvas.panning{cursor:grabbing}
+  #no-data-msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);pointer-events:none}
+  #no-data-msg svg{opacity:.2}
+  #no-data-msg span{font-size:.85rem}
+  #map-legend{position:absolute;bottom:10px;right:10px;background:rgba(10,15,30,.88);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px;font-size:.72rem;backdrop-filter:blur(4px)}
+  .legend-row{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+  .legend-row:last-child{margin-bottom:0}
+  .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  #compare-label{position:absolute;top:8px;left:8px;background:rgba(10,15,30,.88);border:1px solid var(--border);border-radius:var(--radius-sm);padding:5px 10px;font-size:.75rem;display:none;backdrop-filter:blur(4px)}
+
+  /* ── Logs page ── */
+  #page-logs .scroll-content{display:flex;flex-direction:column;gap:8px;padding:14px}
+  .session-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);transition:border-color .15s;flex-shrink:0}
+  .session-row:hover{border-color:var(--border2)}
+  .session-row-info{flex:1;min-width:0}
+  .session-row .name{font-weight:600;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .session-row .meta{font-size:.75rem;color:var(--muted);margin-top:2px}
+  .session-row .actions{display:flex;gap:4px;flex-shrink:0}
+  .icon-btn{background:none;border:none;cursor:pointer;color:var(--muted);padding:6px;border-radius:var(--radius-xs);transition:all .15s;display:flex;align-items:center}
+  .icon-btn:hover{color:var(--text);background:var(--surface3)}
+
+  /* ── Settings page ── */
+  #page-settings .scroll-content{display:flex;flex-direction:column;gap:12px;padding:14px}
   .field{margin-bottom:14px}
-  .field label{display:block;font-size:.82rem;color:var(--muted);margin-bottom:5px;font-weight:500}
-  .field input[type=number],.field select{width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:.9rem;outline:none;transition:border-color .15s}
+  .field:last-child{margin-bottom:0}
+  .field label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:5px;font-weight:500}
+  .field input[type=number],.field input[type=text],.field select{width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:.9rem;outline:none;transition:border-color .15s}
   .field input:focus,.field select:focus{border-color:var(--accent)}
-  .field .hint{font-size:.75rem;color:var(--muted);margin-top:4px}
-  .radio-group{display:flex;gap:8px}
-  .radio-group label{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:.85rem;transition:all .15s}
+  .field .hint{font-size:.74rem;color:var(--muted);margin-top:4px}
+  .radio-group{display:flex;gap:6px}
+  .radio-group label{flex:1;display:flex;align-items:center;justify-content:center;padding:8px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;font-size:.83rem;transition:all .15s;font-weight:500;color:var(--muted2)}
   .radio-group input[type=radio]{display:none}
-  .radio-group input:checked+span{color:var(--accent)}
-  .radio-group label:has(input:checked){border-color:var(--accent);background:rgba(56,189,248,.08)}
+  .radio-group label:has(input:checked){border-color:var(--accent);background:var(--accent-dim);color:var(--accent)}
 
   /* Toast */
-  #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 18px;font-size:.85rem;box-shadow:0 8px 30px rgba(0,0,0,.4);transition:transform .25s,opacity .25s;opacity:0;pointer-events:none;z-index:999;white-space:nowrap}
+  #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:10px 18px;font-size:.85rem;box-shadow:0 8px 32px rgba(0,0,0,.5);transition:transform .25s,opacity .25s;opacity:0;pointer-events:none;z-index:999;white-space:nowrap}
   #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 
   /* Scrollbar */
-  ::-webkit-scrollbar{width:4px;height:4px}
+  ::-webkit-scrollbar{width:3px;height:3px}
   ::-webkit-scrollbar-track{background:transparent}
-  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+  ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
   /* Modal */
-  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;display:none}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px;display:none}
   .modal-overlay.open{display:flex}
-  .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;width:100%;max-width:400px}
-  .modal h3{font-size:1rem;font-weight:700;margin-bottom:14px}
+  .modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:20px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .modal h3{font-size:.95rem;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .modal h3 svg{color:var(--accent)}
   .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 </style>
 </head>
@@ -148,97 +247,157 @@
 <div id="app">
   <header>
     <div id="status-dot"></div>
-    <h1>MeshCore <span>Heatmapper</span></h1>
-    <span id="gps-status" onclick="toggleGPS()">📍 GPS Off</span>
-    <button id="ble-btn" onclick="connectBLE()">Connect BLE</button>
+    <div class="logo">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>
+      <h1>MeshCore <em>Heatmapper</em></h1>
+    </div>
+    <div id="header-right">
+      <button class="hdr-btn" id="gps-status" onclick="toggleGPS()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+        <span id="gps-label">GPS Off</span>
+      </button>
+      <button class="hdr-btn" id="ble-btn" onclick="connectBLE()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>
+        <span id="ble-label">Connect</span>
+      </button>
+    </div>
   </header>
 
   <nav>
-    <button class="active" onclick="showPage('session',this)">📡 Session</button>
-    <button onclick="showPage('heatmap',this)">🗺 Heatmap</button>
-    <button onclick="showPage('logs',this)">📋 Logs</button>
-    <button onclick="showPage('settings',this)">⚙️ Settings</button>
+    <button class="active" onclick="showPage('session',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><path d="m5.64 5.64 2.12 2.12M16.24 16.24l2.12 2.12M5.64 18.36l2.12-2.12M16.24 7.76l2.12-2.12"/></svg>
+      Session
+    </button>
+    <button onclick="showPage('heatmap',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
+      Heatmap
+    </button>
+    <button onclick="showPage('logs',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      Logs
+    </button>
+    <button onclick="showPage('settings',this)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </button>
   </nav>
 
   <main>
     <!-- SESSION PAGE -->
     <div id="page-session" class="page active">
-      <div class="card">
-        <h2>Select Repeater</h2>
-        <div id="contact-list">
-          <div style="color:var(--muted);font-size:.85rem;padding:8px">Connect to BLE device to load contacts…</div>
+
+      <!-- Sub-view 1: contact picker -->
+      <div id="view-picker" class="sub-view active">
+        <div id="view-picker-header">
+          <button class="btn btn-secondary btn-sm" onclick="refreshContacts()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+            Refresh
+          </button>
+          <span id="contact-count"></span>
         </div>
-        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
-          <button class="btn btn-secondary" style="font-size:.8rem;padding:7px 12px" onclick="refreshContacts()">↻ Refresh</button>
-          <span id="contact-count" style="font-size:.78rem;color:var(--muted)"></span>
+        <div id="contact-list-scroll">
+          <div class="empty-state" id="contact-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m7 7 10 10-5 5V2l5 5L7 17"/></svg>
+            <p>Connect your MeshCore node<br>to load contacts</p>
+          </div>
         </div>
       </div>
 
-      <div class="card">
-        <h2>Ping Session</h2>
-        <div id="session-status">
-          <div id="ping-indicator" class="idle">📶</div>
-          <div style="flex:1">
-            <div id="ping-state-text" style="font-weight:600">Idle</div>
-            <div id="selected-target" style="font-size:.8rem;color:var(--muted)">No target selected</div>
+      <!-- Sub-view 2: session detail -->
+      <div id="view-session" class="sub-view">
+
+        <!-- Back row -->
+        <div id="session-back-row">
+          <button class="btn btn-secondary btn-sm" onclick="showSubView('picker')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Back
+          </button>
+          <span id="session-target-label">—</span>
+        </div>
+
+        <!-- Status banner -->
+        <div id="status-banner" class="idle">
+          <div id="banner-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h2a2 2 0 0 1 2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6a2 2 0 0 1 2-2h2"/><path d="M12 2v10"/><path d="m8 8 4-4 4 4"/></svg>
           </div>
-          <div id="ping-counter" style="text-align:right">
-            <div style="font-size:1.5rem;font-weight:700;color:var(--accent)" id="ping-count-num">0</div>
-            <div style="font-size:.7rem;color:var(--muted)">pings</div>
+          <div id="banner-text">
+            <div id="banner-state">Ready</div>
+            <div id="banner-target">Select a contact to begin</div>
+          </div>
+          <div id="banner-count">
+            <div id="banner-count-num">0</div>
+            <div id="banner-count-label">pings</div>
           </div>
         </div>
 
+        <!-- Stats -->
         <div class="stat-grid">
           <div class="stat-box"><div class="stat-val" id="stat-rtt">—</div><div class="stat-label">RTT ms</div></div>
           <div class="stat-box"><div class="stat-val" id="stat-snr">—</div><div class="stat-label">SNR dB</div></div>
-          <div class="stat-box"><div class="stat-val" id="stat-success">—</div><div class="stat-label">Success %</div></div>
+          <div class="stat-box"><div class="stat-val" id="stat-success">—</div><div class="stat-label">Success</div></div>
         </div>
 
-        <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <div class="field" style="flex:1;min-width:140px;margin:0">
-            <label>Session Name</label>
-            <input type="text" id="session-name" placeholder="e.g. Antenna Test #1" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:.9rem;outline:none">
+        <!-- Controls -->
+        <div id="session-controls">
+          <input type="text" id="session-name-input" placeholder="Session name…">
+          <button class="btn btn-green" id="start-btn" onclick="startSession()" disabled>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+            Start
+          </button>
+          <button class="btn btn-danger" id="stop-btn" onclick="stopSession()" disabled>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            Stop
+          </button>
+        </div>
+
+        <!-- Ping log -->
+        <div id="ping-log-panel">
+          <div id="ping-log-header">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <span>Ping Log</span>
+          </div>
+          <div id="ping-log-scroll">
+            <div class="log-empty">No pings yet</div>
           </div>
         </div>
 
-        <div class="btn-row" style="margin-top:12px">
-          <button class="btn btn-primary" id="start-btn" onclick="startSession()" disabled>▶ Start</button>
-          <button class="btn btn-danger" id="stop-btn" onclick="stopSession()" disabled>■ Stop</button>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2>Ping Log</h2>
-        <div id="ping-log"><div style="color:var(--muted);font-size:.8rem">No pings yet…</div></div>
       </div>
     </div>
 
     <!-- HEATMAP PAGE -->
     <div id="page-heatmap" class="page">
-      <div class="card" style="padding:10px 14px">
-        <h2>Compare Sessions</h2>
-        <div id="heatmap-sessions">
-          <div style="color:var(--muted);font-size:.85rem">No sessions recorded yet</div>
-        </div>
-        <div style="font-size:.75rem;color:var(--muted);margin-top:4px">Tap one session to view • Tap two to compare A/B</div>
+      <div id="heatmap-chips-row">
+        <span id="heatmap-hint">Tap a session to view, two to compare</span>
+        <div id="heatmap-sessions" style="display:flex;gap:6px;flex-wrap:wrap"></div>
       </div>
-
-      <div class="map-toolbar">
-        <button class="btn btn-secondary" style="font-size:.78rem;padding:6px 10px" onclick="resetMapView()">⟳ Reset View</button>
-        <button class="btn btn-secondary" style="font-size:.78rem;padding:6px 10px" onclick="toggleHeatmapMode()" id="heatmap-mode-btn">Mode: SNR</button>
-        <span style="flex:1"></span>
-        <button class="btn btn-secondary" style="font-size:.78rem;padding:6px 10px" onclick="exportCurrentSession()">⬇ Export</button>
-        <label class="btn btn-secondary" style="font-size:.78rem;padding:6px 10px;cursor:pointer">⬆ Import<input type="file" accept=".json" style="display:none" onchange="importSession(event)"></label>
+      <div id="map-toolbar">
+        <button class="btn btn-secondary btn-sm" onclick="resetMapView()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+          Reset
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="toggleHeatmapMode()" id="heatmap-mode-btn">SNR</button>
+        <div id="map-toolbar-spacer"></div>
+        <button class="btn btn-secondary btn-sm" onclick="exportCurrentSession()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export
+        </button>
+        <label class="btn btn-secondary btn-sm" style="cursor:pointer">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Import
+          <input type="file" accept=".json" style="display:none" onchange="importSession(event)">
+        </label>
       </div>
-
       <div id="map-wrap">
         <canvas id="map-canvas"></canvas>
-        <div id="no-data-msg">Select a session to view heatmap</div>
+        <div id="no-data-msg">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg>
+          <span>Select a session to view heatmap</span>
+        </div>
         <div id="map-legend">
-          <div class="legend-row"><div class="legend-dot" style="background:#4ade80"></div>Strong (&gt;0 dB)</div>
-          <div class="legend-row"><div class="legend-dot" style="background:#facc15"></div>OK (-5–0 dB)</div>
-          <div class="legend-row"><div class="legend-dot" style="background:#f97316"></div>Weak (-10–-5 dB)</div>
-          <div class="legend-row"><div class="legend-dot" style="background:#ef4444"></div>Poor (&lt;-10 dB)</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#4ade80"></div>Strong &gt;0 dB</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#facc15"></div>OK &minus;5&ndash;0 dB</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#f97316"></div>Weak &minus;10&ndash;&minus;5 dB</div>
+          <div class="legend-row"><div class="legend-dot" style="background:#ef4444"></div>Poor &lt;&minus;10 dB</div>
         </div>
         <div id="compare-label"></div>
       </div>
@@ -246,43 +405,51 @@
 
     <!-- LOGS PAGE -->
     <div id="page-logs" class="page">
-      <div class="card">
-        <h2>Recorded Sessions</h2>
-        <div id="sessions-list">
-          <div style="color:var(--muted);font-size:.85rem">No sessions saved yet</div>
+      <div class="scroll-content" id="sessions-list-wrap">
+        <div class="empty-state" id="logs-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+          <p>No sessions saved yet</p>
         </div>
+        <div id="sessions-list" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
     </div>
 
     <!-- SETTINGS PAGE -->
     <div id="page-settings" class="page">
-      <div class="card">
-        <h2>Ping Settings</h2>
-        <div class="field">
-          <label>Ping Interval (ms)</label>
-          <input type="number" id="setting-interval" value="1000" min="200" max="10000" step="100">
-          <div class="hint">Delay between pings (default 1000ms)</div>
-        </div>
-        <div class="field">
-          <label>Ping Timeout (ms)</label>
-          <input type="number" id="setting-timeout" value="3000" min="500" max="15000" step="500">
-          <div class="hint">Max wait for each ping response (default 3000ms)</div>
-        </div>
-        <div class="field">
-          <label>Ping Size</label>
-          <div class="radio-group">
-            <label><input type="radio" name="ping-size" value="1" checked><span>1 byte</span></label>
-            <label><input type="radio" name="ping-size" value="2"><span>2 bytes</span></label>
-            <label><input type="radio" name="ping-size" value="3"><span>3 bytes</span></label>
+      <div class="scroll-content">
+        <div class="card">
+          <h2>Ping Settings</h2>
+          <div class="field">
+            <label>Ping Interval (ms)</label>
+            <input type="number" id="setting-interval" value="1000" min="200" max="10000" step="100">
+            <div class="hint">Delay between pings</div>
           </div>
-          <div class="hint">Payload size of each ping packet</div>
+          <div class="field">
+            <label>Ping Timeout (ms)</label>
+            <input type="number" id="setting-timeout" value="3000" min="500" max="15000" step="500">
+            <div class="hint">Max wait for each ping response</div>
+          </div>
+          <div class="field">
+            <label>Ping Payload Size</label>
+            <div class="radio-group">
+              <label><input type="radio" name="ping-size" value="1" checked>1 byte</label>
+              <label><input type="radio" name="ping-size" value="2">2 bytes</label>
+              <label><input type="radio" name="ping-size" value="3">3 bytes</label>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="card">
-        <h2>Data</h2>
-        <div class="btn-row">
-          <button class="btn btn-secondary" onclick="exportAllSessions()">⬇ Export All Sessions</button>
-          <button class="btn btn-danger" onclick="clearAllData()">🗑 Clear All Data</button>
+        <div class="card">
+          <h2>Data</h2>
+          <div class="btn-row">
+            <button class="btn btn-secondary" onclick="exportAllSessions()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export All Sessions
+            </button>
+            <button class="btn btn-danger" onclick="clearAllData()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+              Clear All Data
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -292,10 +459,13 @@
 <!-- Rename Modal -->
 <div class="modal-overlay" id="rename-modal">
   <div class="modal">
-    <h3>Rename Session</h3>
+    <h3>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+      Rename Session
+    </h3>
     <div class="field">
       <label>Session Name</label>
-      <input type="text" id="rename-input" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:.9rem;outline:none">
+      <input type="text" id="rename-input" style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:.9rem;outline:none">
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeRenameModal()">Cancel</button>
@@ -308,920 +478,640 @@
 
 <script>
 // ─── Constants ─────────────────────────────────────────────────────────────
-const BLE_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-const BLE_RX_CHAR = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // we write here
-const BLE_TX_CHAR = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // we read here
+const BLE_SERVICE='6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const BLE_RX_CHAR='6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+const BLE_TX_CHAR='6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 
-const CMD = {
-  AppStart: 1, SendTxtMsg: 2, GetContacts: 4, GetDeviceTime: 5,
-  SetDeviceTime: 6, SendRawData: 25, DeviceQuery: 22,
-};
-const RESP = {
-  Ok: 0, Err: 1, ContactsStart: 2, Contact: 3, EndOfContacts: 4,
-  SelfInfo: 5, Sent: 6, CurrTime: 9, NoMoreMessages: 10, DeviceInfo: 13,
-};
-const PUSH = {
-  Advert: 0x80, PathUpdated: 0x81, SendConfirmed: 0x82,
-  MsgWaiting: 0x83, RawData: 0x84, LogRxData: 0x88,
-};
+const CMD={AppStart:1,SendTxtMsg:2,GetContacts:4,GetDeviceTime:5,SetDeviceTime:6,SendRawData:25,DeviceQuery:22};
+const RESP={Ok:0,Err:1,ContactsStart:2,Contact:3,EndOfContacts:4,SelfInfo:5,Sent:6,CurrTime:9,NoMoreMessages:10,DeviceInfo:13};
+const PUSH={Advert:0x80,PathUpdated:0x81,SendConfirmed:0x82,MsgWaiting:0x83,RawData:0x84,LogRxData:0x88};
 
 // ─── State ──────────────────────────────────────────────────────────────────
-let bleDevice = null, bleServer = null, rxChar = null, txChar = null;
-let connected = false;
-let contacts = [];
-let selectedContact = null;
-let sessionActive = false;
-let pingTimer = null;
-let pingPending = false;
-let pendingPingResolve = null, pendingPingReject = null, pendingPingTimeout = null;
-let currentSession = null; // { id, name, target, pings: [{ts, rtt, snr, rssi, lat, lon}], startTime }
-let sessions = []; // stored sessions
-let gpsActive = false;
-let lastGPS = null;
-let watchId = null;
-let pingCount = 0, pingSuccess = 0;
-let heatmapMode = 'snr'; // or 'rssi'
-let selectedSessions = []; // up to 2 for A/B compare
-let mapState = { panX: 0, panY: 0, scale: 1 };
-let pendingRenameId = null;
+let bleDevice=null,bleServer=null,rxChar=null,txChar=null;
+let connected=false;
+let contacts=[];
+let selectedContact=null;
+let sessionActive=false;
+let pingTimer=null;
+let currentSession=null;
+let sessions=[];
+let gpsActive=false,lastGPS=null,watchId=null;
+let pingCount=0,pingSuccess=0;
+let heatmapMode='snr';
+let selectedSessions=[];
+let mapState={panX:0,panY:0,scale:1};
+let pendingRenameId=null;
+let mapDragging=false,mapDragStart={x:0,y:0},mapPanStart={x:0,y:0};
 
-// Map interaction
-let mapDragging = false, mapDragStart = {x:0,y:0}, mapPanStart = {x:0,y:0};
+// ─── Sub-view nav ───────────────────────────────────────────────────────────
+function showSubView(name){
+  document.getElementById('view-picker').classList.toggle('active',name==='picker');
+  document.getElementById('view-session').classList.toggle('active',name==='session');
+}
 
 // ─── BLE ────────────────────────────────────────────────────────────────────
-async function connectBLE() {
-  if (connected) {
-    disconnectBLE();
-    return;
-  }
-  if (!navigator.bluetooth) {
-    toast('Web Bluetooth not supported in this browser');
-    return;
-  }
-  try {
-    bleDevice = await navigator.bluetooth.requestDevice({
-      filters: [{ services: [BLE_SERVICE] }],
-    });
-    bleDevice.addEventListener('gattserverdisconnected', onBLEDisconnected);
-    bleServer = await bleDevice.gatt.connect();
-    const service = await bleServer.getPrimaryService(BLE_SERVICE);
-    const chars = await service.getCharacteristics();
-    rxChar = chars.find(c => c.uuid === BLE_RX_CHAR);
-    txChar = chars.find(c => c.uuid === BLE_TX_CHAR);
+async function connectBLE(){
+  if(connected){disconnectBLE();return;}
+  if(!navigator.bluetooth){toast('Web Bluetooth not supported in this browser');return;}
+  try{
+    bleDevice=await navigator.bluetooth.requestDevice({filters:[{services:[BLE_SERVICE]}]});
+    bleDevice.addEventListener('gattserverdisconnected',onBLEDisconnected);
+    bleServer=await bleDevice.gatt.connect();
+    const service=await bleServer.getPrimaryService(BLE_SERVICE);
+    const chars=await service.getCharacteristics();
+    rxChar=chars.find(c=>c.uuid===BLE_RX_CHAR);
+    txChar=chars.find(c=>c.uuid===BLE_TX_CHAR);
     await txChar.startNotifications();
-    txChar.addEventListener('characteristicvaluechanged', onBLEFrame);
-    connected = true;
+    txChar.addEventListener('characteristicvaluechanged',onBLEFrame);
+    connected=true;
     updateConnectionUI(true);
-    toast('Connected to ' + bleDevice.name);
+    toast('Connected to '+bleDevice.name);
     await sendDeviceQuery();
     await refreshContacts();
-  } catch (e) {
+  }catch(e){
     console.error(e);
-    if (e.name !== 'NotFoundError') toast('BLE error: ' + e.message);
+    if(e.name!=='NotFoundError') toast('BLE error: '+e.message);
   }
 }
 
-function disconnectBLE() {
-  try { bleServer?.disconnect(); } catch {}
+function disconnectBLE(){
+  try{bleServer?.disconnect();}catch{}
   onBLEDisconnected();
 }
 
-function onBLEDisconnected() {
-  connected = false;
-  bleServer = null; rxChar = null; txChar = null;
+function onBLEDisconnected(){
+  connected=false;bleServer=null;rxChar=null;txChar=null;
   stopSession();
   updateConnectionUI(false);
   toast('Disconnected');
 }
 
-function updateConnectionUI(conn) {
-  const dot = document.getElementById('status-dot');
-  const btn = document.getElementById('ble-btn');
-  dot.className = conn ? 'connected' : '';
-  btn.textContent = conn ? '✕ Disconnect' : 'Connect BLE';
-  btn.className = 'ble-btn' + (conn ? ' connected' : '');
+function updateConnectionUI(conn){
+  const dot=document.getElementById('status-dot');
+  const btn=document.getElementById('ble-btn');
+  const label=document.getElementById('ble-label');
+  dot.className=conn?'connected':'';
+  label.textContent=conn?'Disconnect':'Connect';
+  btn.className='hdr-btn'+(conn?' accent':'');
+  if(!conn) document.getElementById('start-btn').disabled=true;
+  else if(selectedContact) document.getElementById('start-btn').disabled=false;
 }
 
-async function writeFrame(bytes) {
-  if (!rxChar) return;
-  try { await rxChar.writeValue(bytes); }
-  catch (e) { console.warn('BLE write error', e); }
+async function writeFrame(bytes){
+  if(!rxChar) return;
+  try{await rxChar.writeValue(bytes);}catch(e){console.warn('BLE write error',e);}
 }
 
-// Frame dispatcher
-const frameListeners = {}; // code -> [fn]
-function onBLEFrame(event) {
-  const frame = new Uint8Array(event.target.value.buffer);
-  const code = frame[0];
-  const rest = frame.slice(1);
-  const listeners = frameListeners[code] || [];
-  for (const fn of [...listeners]) fn(rest);
+// ─── Frame dispatcher ─────────────────────────────────────────────────────
+const frameListeners={};
+function onBLEFrame(event){
+  const frame=new Uint8Array(event.target.value.buffer);
+  const code=frame[0],rest=frame.slice(1);
+  const listeners=frameListeners[code]||[];
+  for(const fn of[...listeners]) fn(rest);
 }
-
-function onFrame(code, fn, once = false) {
-  if (!frameListeners[code]) frameListeners[code] = [];
-  const wrapper = (data) => {
-    if (once) offFrame(code, wrapper);
-    fn(data);
-  };
-  wrapper._orig = fn;
+function onFrame(code,fn,once=false){
+  if(!frameListeners[code]) frameListeners[code]=[];
+  const wrapper=(data)=>{if(once)offFrame(code,wrapper);fn(data);};
+  wrapper._orig=fn;
   frameListeners[code].push(wrapper);
   return wrapper;
 }
-
-function onceFrame(code, fn) {
-  return onFrame(code, fn, true);
+function onceFrame(code,fn){return onFrame(code,fn,true);}
+function offFrame(code,wrapperOrFn){
+  if(!frameListeners[code]) return;
+  frameListeners[code]=frameListeners[code].filter(w=>w!==wrapperOrFn&&w._orig!==wrapperOrFn);
 }
 
-function offFrame(code, wrapperOrFn) {
-  if (!frameListeners[code]) return;
-  frameListeners[code] = frameListeners[code].filter(
-    w => w !== wrapperOrFn && w._orig !== wrapperOrFn
-  );
+// ─── Buffer helpers ────────────────────────────────────────────────────────
+class BW{
+  constructor(){this.bytes=[];}
+  u8(v){this.bytes.push(v&0xff);return this;}
+  u16le(v){this.bytes.push(v&0xff,(v>>8)&0xff);return this;}
+  u32le(v){this.bytes.push(v&0xff,(v>>8)&0xff,(v>>16)&0xff,(v>>24)&0xff);return this;}
+  i32le(v){return this.u32le(v>>>0);}
+  raw(arr){for(const b of arr)this.bytes.push(b);return this;}
+  str(s){for(let i=0;i<s.length;i++)this.bytes.push(s.charCodeAt(i));this.bytes.push(0);return this;}
+  build(){return new Uint8Array(this.bytes);}
 }
-
-// ─── BufferWriter ────────────────────────────────────────────────────────────
-class BW {
-  constructor() { this.bytes = []; }
-  u8(v) { this.bytes.push(v & 0xff); return this; }
-  u16le(v) { this.bytes.push(v & 0xff, (v >> 8) & 0xff); return this; }
-  u32le(v) {
-    this.bytes.push(v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff);
-    return this;
-  }
-  i32le(v) { return this.u32le(v >>> 0); }
-  raw(arr) { for (const b of arr) this.bytes.push(b); return this; }
-  str(s) { for (let i = 0; i < s.length; i++) this.bytes.push(s.charCodeAt(i)); this.bytes.push(0); return this; }
-  build() { return new Uint8Array(this.bytes); }
-}
-
-class BR {
-  constructor(data) { this.data = data; this.pos = 0; }
-  u8() { return this.data[this.pos++]; }
-  i8() { const v = this.data[this.pos++]; return v > 127 ? v - 256 : v; }
-  u16le() { const v = this.data[this.pos] | (this.data[this.pos+1] << 8); this.pos += 2; return v; }
-  u32le() { const v = (this.data[this.pos] | (this.data[this.pos+1] << 8) | (this.data[this.pos+2] << 16) | (this.data[this.pos+3] << 24)) >>> 0; this.pos += 4; return v; }
-  i32le() { const v = this.data[this.pos] | (this.data[this.pos+1] << 8) | (this.data[this.pos+2] << 16) | (this.data[this.pos+3] << 24); this.pos += 4; return v; }
-  bytes(n) { const v = this.data.slice(this.pos, this.pos + n); this.pos += n; return v; }
-  cstr(n) {
-    let s = '';
-    for (let i = 0; i < n; i++) {
-      const c = this.data[this.pos++];
-      if (c !== 0) s += String.fromCharCode(c);
-    }
-    return s;
-  }
-  rest() { return this.data.slice(this.pos); }
-  remaining() { return this.data.length - this.pos; }
+class BR{
+  constructor(data){this.data=data;this.pos=0;}
+  u8(){return this.data[this.pos++];}
+  i8(){const v=this.data[this.pos++];return v>127?v-256:v;}
+  u16le(){const v=this.data[this.pos]|(this.data[this.pos+1]<<8);this.pos+=2;return v;}
+  u32le(){const v=(this.data[this.pos]|(this.data[this.pos+1]<<8)|(this.data[this.pos+2]<<16)|(this.data[this.pos+3]<<24))>>>0;this.pos+=4;return v;}
+  i32le(){const v=this.data[this.pos]|(this.data[this.pos+1]<<8)|(this.data[this.pos+2]<<16)|(this.data[this.pos+3]<<24);this.pos+=4;return v;}
+  bytes(n){const v=this.data.slice(this.pos,this.pos+n);this.pos+=n;return v;}
+  cstr(n){let s='';for(let i=0;i<n;i++){const c=this.data[this.pos++];if(c!==0)s+=String.fromCharCode(c);}return s;}
+  rest(){return this.data.slice(this.pos);}
 }
 
 // ─── Commands ─────────────────────────────────────────────────────────────
-async function sendDeviceQuery() {
-  const frame = new BW().u8(CMD.DeviceQuery).u8(1).build();
-  await writeFrame(frame);
+async function sendDeviceQuery(){
+  await writeFrame(new BW().u8(CMD.DeviceQuery).u8(1).build());
 }
 
-async function refreshContacts() {
-  if (!connected) { toast('Not connected'); return; }
-  contacts = [];
-  const frame = new BW().u8(CMD.GetContacts).build();
-  return new Promise((resolve) => {
-    onceFrame(RESP.EndOfContacts, () => {
-      renderContactList();
-      resolve();
-    });
-    onFrame(RESP.Contact, parseContactFrame);
-    writeFrame(frame);
-    setTimeout(() => { offFrame(RESP.Contact, parseContactFrame); resolve(); }, 5000);
+async function refreshContacts(){
+  if(!connected){toast('Not connected');return;}
+  contacts=[];
+  return new Promise((resolve)=>{
+    onceFrame(RESP.EndOfContacts,()=>{renderContactList();resolve();});
+    onFrame(RESP.Contact,parseContactFrame);
+    writeFrame(new BW().u8(CMD.GetContacts).build());
+    setTimeout(()=>{offFrame(RESP.Contact,parseContactFrame);resolve();},5000);
   });
 }
 
-function parseContactFrame(data) {
-  const br = new BR(data);
-  const publicKey = br.bytes(32);
-  const type = br.u8();
-  const flags = br.u8();
-  const outPathLen = br.i8();
-  const outPath = br.bytes(64);
-  const advName = br.cstr(32);
-  const lastAdvert = br.u32le();
-  const advLat = br.i32le();
-  const advLon = br.i32le();
-  contacts.push({ publicKey, type, flags, outPathLen, outPath, advName, lastAdvert, advLat, advLon });
+function parseContactFrame(data){
+  const br=new BR(data);
+  contacts.push({
+    publicKey:br.bytes(32),
+    type:br.u8(),
+    flags:br.u8(),
+    outPathLen:br.i8(),
+    outPath:br.bytes(64),
+    advName:br.cstr(32),
+    lastAdvert:br.u32le(),
+    advLat:br.i32le(),
+    advLon:br.i32le(),
+  });
 }
 
-function renderContactList() {
-  const el = document.getElementById('contact-list');
-  const count = document.getElementById('contact-count');
-  if (!contacts.length) {
-    el.innerHTML = '<div style="color:var(--muted);font-size:.85rem;padding:8px">No contacts found</div>';
-    count.textContent = '';
+// ─── SVG Icons ────────────────────────────────────────────────────────────
+const ICON_REPEATER=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M5.5 7.5 12 2l6.5 5.5"/><circle cx="12" cy="15" r="3"/><path d="M8 18h8"/></svg>`;
+const ICON_CHAT=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
+const ICON_ARROW=`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;
+const ICON_PENCIL=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>`;
+const ICON_DOWNLOAD=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+const ICON_TRASH=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>`;
+
+function renderContactList(){
+  const el=document.getElementById('contact-list-scroll');
+  const empty=document.getElementById('contact-empty');
+  const count=document.getElementById('contact-count');
+  if(!contacts.length){
+    empty.style.display='flex';
+    el.innerHTML='';el.appendChild(empty);
+    count.textContent='';
     return;
   }
-  // Show all contacts; repeaters are type 2, but show all for flexibility
-  el.innerHTML = contacts.map((c, i) => {
-    const isRepeater = c.type === 2;
-    const icon = isRepeater ? '📡' : '💬';
-    const typeLabel = isRepeater ? 'Repeater' : `Type ${c.type}`;
-    const sel = selectedContact && arrEq(selectedContact.publicKey, c.publicKey);
-    return `<div class="contact-item${sel ? ' selected' : ''}" onclick="selectContact(${i})">
+  empty.style.display='none';
+  el.innerHTML=contacts.map((c,i)=>{
+    const isRepeater=c.type===2;
+    const icon=isRepeater?ICON_REPEATER:ICON_CHAT;
+    const typeLabel=isRepeater?'Repeater':`Type ${c.type}`;
+    return `<div class="contact-item" onclick="selectContact(${i})">
       <div class="contact-icon">${icon}</div>
-      <div>
-        <div class="contact-name">${escHtml(c.advName || '(unnamed)')}</div>
+      <div class="contact-info">
+        <div class="contact-name">${escHtml(c.advName||'(unnamed)')}</div>
         <div class="contact-type">${typeLabel}</div>
       </div>
+      <div class="contact-arrow">${ICON_ARROW}</div>
     </div>`;
   }).join('');
-  count.textContent = contacts.length + ' contact' + (contacts.length !== 1 ? 's' : '');
+  count.textContent=contacts.length+' contact'+(contacts.length!==1?'s':'');
 }
 
-function selectContact(idx) {
-  selectedContact = contacts[idx];
-  renderContactList();
-  document.getElementById('selected-target').textContent = 'Target: ' + (selectedContact.advName || '(unnamed)');
-  document.getElementById('start-btn').disabled = !connected;
+function selectContact(idx){
+  selectedContact=contacts[idx];
+  document.getElementById('session-target-label').textContent=selectedContact.advName||'(unnamed)';
+  document.getElementById('banner-target').textContent=selectedContact.advName||'(unnamed)';
+  document.getElementById('start-btn').disabled=!connected;
+  showSubView('session');
 }
 
 // ─── Ping ───────────────────────────────────────────────────────────────────
-function getSetting(id) {
-  return parseInt(document.getElementById(id).value, 10);
-}
+function getSetting(id){return parseInt(document.getElementById(id).value,10);}
+function getPingSize(){const el=document.querySelector('input[name=ping-size]:checked');return el?parseInt(el.value,10):1;}
 
-function getPingSize() {
-  const el = document.querySelector('input[name=ping-size]:checked');
-  return el ? parseInt(el.value, 10) : 1;
-}
-
-function buildPingPayload(contactPubKey) {
-  const pingSize = getPingSize();
-  const bw = new BW();
-  bw.u32le(Date.now() & 0xffffffff); // 4-byte timestamp for uniqueness
-  bw.raw([0x70, 0x69, 0x6E, 0x67]); // "ping"
-  bw.raw(contactPubKey.slice(0, 2)); // 2 bytes from repeater pubkey
-  // pad to desired size (min 10 bytes from above; pingSize controls extra padding for "3-byte" means just mark it)
-  // The "ping size" in MeshCore terms is the raw payload passed over LoRa after the header.
-  // We extend/shrink raw payload bytes accordingly.
+function buildPingPayload(contactPubKey){
+  const bw=new BW();
+  bw.u32le(Date.now()&0xffffffff);
+  bw.raw([0x70,0x69,0x6E,0x67]);
+  bw.raw(contactPubKey.slice(0,2));
   return bw.build();
 }
 
-function sendPing(contact) {
-  return new Promise((resolve, reject) => {
-    const timeout = getSetting('setting-timeout');
-    const rawBytes = buildPingPayload(contact.publicKey);
-    const startMs = Date.now();
-
-    let resolved = false;
-    const cleanup = () => {
-      offFrame(PUSH.LogRxData, onRxData);
-      offFrame(RESP.Err, onErr);
-      clearTimeout(timer);
-    };
-    const timer = setTimeout(() => {
-      if (resolved) return;
-      resolved = true;
-      cleanup();
-      reject(new Error('timeout'));
-    }, timeout);
-
-    const onRxData = (data) => {
-      if (resolved) return;
-      const br = new BR(data);
-      const lastSnr = br.i8() / 4;
-      const lastRssi = br.i8();
-      const raw = br.rest();
-      // Verify the echoed payload matches what we sent
-      if (raw.length < rawBytes.length) return;
-      // Parse as packet: skip header (1 byte path_header) + path (variable)
-      // In zero-hop raw data, the repeater echoes the exact raw bytes prepended by packet header.
-      // We just check if our rawBytes appear in the returned raw.
-      let found = false;
-      for (let offset = 0; offset <= raw.length - rawBytes.length; offset++) {
-        let match = true;
-        for (let j = 0; j < rawBytes.length; j++) {
-          if (raw[offset + j] !== rawBytes[j]) { match = false; break; }
-        }
-        if (match) { found = true; break; }
+function sendPing(contact){
+  return new Promise((resolve,reject)=>{
+    const timeout=getSetting('setting-timeout');
+    const rawBytes=buildPingPayload(contact.publicKey);
+    const startMs=Date.now();
+    let resolved=false;
+    const cleanup=()=>{offFrame(PUSH.LogRxData,onRxData);offFrame(RESP.Err,onErr);clearTimeout(timer);};
+    const timer=setTimeout(()=>{if(!resolved){resolved=true;cleanup();reject(new Error('timeout'));}},timeout);
+    const onRxData=(data)=>{
+      if(resolved) return;
+      const br=new BR(data);
+      const lastSnr=br.i8()/4,lastRssi=br.i8();
+      const raw=br.rest();
+      if(raw.length<rawBytes.length) return;
+      let found=false;
+      for(let offset=0;offset<=raw.length-rawBytes.length;offset++){
+        let match=true;
+        for(let j=0;j<rawBytes.length;j++){if(raw[offset+j]!==rawBytes[j]){match=false;break;}}
+        if(match){found=true;break;}
       }
-      if (!found) return;
-      resolved = true;
-      cleanup();
-      resolve({ rtt: Date.now() - startMs, snr: lastSnr, rssi: lastRssi });
+      if(!found) return;
+      resolved=true;cleanup();
+      resolve({rtt:Date.now()-startMs,snr:lastSnr,rssi:lastRssi});
     };
-
-    const onErr = () => {
-      if (resolved) return;
-      resolved = true;
-      cleanup();
-      reject(new Error('err'));
-    };
-
-    onFrame(PUSH.LogRxData, onRxData);
-    onceFrame(RESP.Err, onErr);
-
-    // Send raw data: path = first byte of contact pubkey
-    const path = [contact.publicKey[0]];
-    const frame = new BW()
-      .u8(CMD.SendRawData)
-      .u8(path.length)
-      .raw(path)
-      .raw(rawBytes)
-      .build();
-    writeFrame(frame);
+    const onErr=()=>{if(!resolved){resolved=true;cleanup();reject(new Error('err'));}};
+    onFrame(PUSH.LogRxData,onRxData);
+    onceFrame(RESP.Err,onErr);
+    const path=[contact.publicKey[0]];
+    writeFrame(new BW().u8(CMD.SendRawData).u8(path.length).raw(path).raw(rawBytes).build());
   });
 }
 
 // ─── Session ────────────────────────────────────────────────────────────────
-async function startSession() {
-  if (!connected || !selectedContact || sessionActive) return;
-  sessionActive = true;
-  pingCount = 0;
-  pingSuccess = 0;
-  currentSession = {
-    id: Date.now().toString(),
-    name: document.getElementById('session-name').value.trim() || `Session ${new Date().toLocaleTimeString()}`,
-    target: selectedContact.advName || '(unnamed)',
-    targetKey: Array.from(selectedContact.publicKey),
-    pings: [],
-    startTime: Date.now(),
+async function startSession(){
+  if(!connected||!selectedContact||sessionActive) return;
+  sessionActive=true;pingCount=0;pingSuccess=0;
+  currentSession={
+    id:Date.now().toString(),
+    name:document.getElementById('session-name-input').value.trim()||`Session ${new Date().toLocaleTimeString()}`,
+    target:selectedContact.advName||'(unnamed)',
+    targetKey:Array.from(selectedContact.publicKey),
+    pings:[],
+    startTime:Date.now(),
   };
-
-  document.getElementById('start-btn').disabled = true;
-  document.getElementById('stop-btn').disabled = false;
-  document.getElementById('ping-log').innerHTML = '';
-  updatePingUI('sending');
+  document.getElementById('start-btn').disabled=true;
+  document.getElementById('stop-btn').disabled=false;
+  document.getElementById('ping-log-scroll').innerHTML='<div class="log-empty">No pings yet</div>';
+  updateBanner('sending');
   schedulePing();
 }
 
-async function stopSession() {
-  if (!sessionActive) return;
-  sessionActive = false;
-  clearTimeout(pingTimer);
-  pingTimer = null;
-  updatePingUI('idle');
-  document.getElementById('start-btn').disabled = !connected || !selectedContact;
-  document.getElementById('stop-btn').disabled = true;
-
-  if (currentSession && currentSession.pings.length > 0) {
+async function stopSession(){
+  if(!sessionActive) return;
+  sessionActive=false;clearTimeout(pingTimer);pingTimer=null;
+  updateBanner('idle');
+  document.getElementById('start-btn').disabled=!connected||!selectedContact;
+  document.getElementById('stop-btn').disabled=true;
+  if(currentSession&&currentSession.pings.length>0){
     sessions.push(currentSession);
-    saveSessions();
-    renderSessionsList();
-    renderHeatmapChips();
-    toast(`Session saved: ${currentSession.pings.length} pings`);
+    saveSessions();renderSessionsList();renderHeatmapChips();
+    toast(`Saved: ${currentSession.pings.length} pings`);
   }
-  currentSession = null;
+  currentSession=null;
 }
 
-function schedulePing() {
-  if (!sessionActive) return;
-  doPing();
-}
+function schedulePing(){if(sessionActive) doPing();}
 
-async function doPing() {
-  if (!sessionActive) return;
-  updatePingUI('sending');
-  const interval = getSetting('setting-interval');
-
-  let result = null;
-  try {
-    result = await sendPing(selectedContact);
-    pingSuccess++;
-  } catch (e) {
-    // timeout or err
-  }
+async function doPing(){
+  if(!sessionActive) return;
+  updateBanner('sending');
+  const interval=getSetting('setting-interval');
+  let result=null;
+  try{result=await sendPing(selectedContact);pingSuccess++;}catch(e){}
   pingCount++;
-
-  const gpsData = gpsActive ? lastGPS : null;
-
-  if (result) {
-    updatePingUI('received');
-    if (currentSession) {
-      currentSession.pings.push({
-        ts: Date.now(),
-        rtt: result.rtt,
-        snr: result.snr,
-        rssi: result.rssi,
-        lat: gpsData ? gpsData.lat : null,
-        lon: gpsData ? gpsData.lon : null,
-      });
-    }
-    addLogEntry(true, result.rtt, result.snr, result.rssi);
-    document.getElementById('stat-rtt').textContent = result.rtt;
-    document.getElementById('stat-snr').textContent = result.snr.toFixed(1);
-  } else {
-    updatePingUI('timeout');
-    if (currentSession) {
-      currentSession.pings.push({
-        ts: Date.now(),
-        rtt: null, snr: null, rssi: null,
-        lat: gpsData ? gpsData.lat : null,
-        lon: gpsData ? gpsData.lon : null,
-      });
-    }
-    addLogEntry(false, null, null, null);
+  const gpsData=gpsActive?lastGPS:null;
+  if(result){
+    updateBanner('received');
+    if(currentSession) currentSession.pings.push({ts:Date.now(),rtt:result.rtt,snr:result.snr,rssi:result.rssi,lat:gpsData?gpsData.lat:null,lon:gpsData?gpsData.lon:null});
+    addLogEntry(true,result.rtt,result.snr);
+    document.getElementById('stat-rtt').textContent=result.rtt;
+    document.getElementById('stat-snr').textContent=result.snr.toFixed(1);
+  }else{
+    updateBanner('timeout');
+    if(currentSession) currentSession.pings.push({ts:Date.now(),rtt:null,snr:null,rssi:null,lat:gpsData?gpsData.lat:null,lon:gpsData?gpsData.lon:null});
+    addLogEntry(false,null,null);
   }
-
-  document.getElementById('ping-count-num').textContent = pingCount;
-  const pct = pingCount > 0 ? Math.round(pingSuccess / pingCount * 100) : 0;
-  document.getElementById('stat-success').textContent = pct + '%';
-
-  if (sessionActive) {
-    pingTimer = setTimeout(schedulePing, interval);
-  }
+  document.getElementById('banner-count-num').textContent=pingCount;
+  document.getElementById('stat-success').textContent=(pingCount>0?Math.round(pingSuccess/pingCount*100):0)+'%';
+  if(sessionActive) pingTimer=setTimeout(schedulePing,interval);
 }
 
-function updatePingUI(state) {
-  const ind = document.getElementById('ping-indicator');
-  const txt = document.getElementById('ping-state-text');
-  const dot = document.getElementById('status-dot');
-  ind.className = state;
-  const states = { idle: 'Idle', sending: 'Pinging…', received: 'Received ✓', timeout: 'Timeout ✗' };
-  txt.textContent = states[state] || state;
-  if (state === 'sending') { dot.className = 'connected pinging'; }
-  else if (connected) { dot.className = 'connected'; }
+function updateBanner(state){
+  const banner=document.getElementById('status-banner');
+  const stateEl=document.getElementById('banner-state');
+  const dot=document.getElementById('status-dot');
+  banner.className=state;
+  const states={idle:'Ready',sending:'Pinging…',received:'Received',timeout:'Timeout'};
+  stateEl.textContent=states[state]||state;
+  dot.className=state==='sending'?'connected pinging':connected?'connected':'';
 }
 
-function addLogEntry(ok, rtt, snr, rssi) {
-  const log = document.getElementById('ping-log');
-  // Remove placeholder
-  const ph = log.querySelector('[data-placeholder]');
-  if (ph) ph.remove();
-
-  const entry = document.createElement('div');
-  entry.className = 'log-entry ' + (ok ? 'ok' : 'timeout');
-  if (ok) {
-    const snrPct = Math.max(0, Math.min(100, (snr + 20) * 3));
-    entry.innerHTML = `<b>${new Date().toLocaleTimeString()}</b> RTT: ${rtt}ms · SNR: ${snr.toFixed(1)}dB <span class="snr-bar" style="width:${snrPct}px"></span> RSSI: ${rssi}`;
-  } else {
-    entry.innerHTML = `<b>${new Date().toLocaleTimeString()}</b> <span style="color:var(--red)">Timeout</span>`;
+function addLogEntry(ok,rtt,snr){
+  const log=document.getElementById('ping-log-scroll');
+  const emptyEl=log.querySelector('.log-empty');
+  if(emptyEl) emptyEl.remove();
+  const entry=document.createElement('div');
+  entry.className='log-entry '+(ok?'ok':'timeout');
+  const time=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  if(ok){
+    const snrPct=Math.max(0,Math.min(100,(snr+20)*3.33));
+    const snrCol=snr>0?'var(--green)':snr>-5?'var(--yellow)':snr>-10?'var(--orange)':'var(--red)';
+    entry.innerHTML=`<div class="dot"></div><span class="time">${time}</span><span class="rtt">${rtt}ms</span><div class="snr-bar-track"><div class="snr-bar-fill" style="width:${snrPct}%;background:${snrCol}"></div></div><span class="snr">${snr.toFixed(1)}dB</span>`;
+  }else{
+    entry.innerHTML=`<div class="dot"></div><span class="time">${time}</span><span class="rtt">timeout</span>`;
   }
   log.prepend(entry);
-  // Keep log trimmed
-  while (log.children.length > 100) log.removeChild(log.lastChild);
+  while(log.children.length>80) log.removeChild(log.lastChild);
 }
 
 // ─── GPS ────────────────────────────────────────────────────────────────────
-function toggleGPS() {
-  if (gpsActive) {
-    stopGPS();
-  } else {
-    startGPS();
-  }
-}
-
-function startGPS() {
-  if (!navigator.geolocation) { toast('GPS not available'); return; }
-  watchId = navigator.geolocation.watchPosition(
-    pos => {
-      lastGPS = { lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy };
-      document.getElementById('gps-status').textContent = `📍 ±${Math.round(pos.coords.accuracy)}m`;
-      document.getElementById('gps-status').className = 'active';
+function toggleGPS(){gpsActive?stopGPS():startGPS();}
+function startGPS(){
+  if(!navigator.geolocation){toast('GPS not available');return;}
+  watchId=navigator.geolocation.watchPosition(
+    pos=>{
+      lastGPS={lat:pos.coords.latitude,lon:pos.coords.longitude,acc:pos.coords.accuracy};
+      document.getElementById('gps-label').textContent=`±${Math.round(pos.coords.accuracy)}m`;
+      document.getElementById('gps-status').classList.add('active');
     },
-    err => { toast('GPS error: ' + err.message); stopGPS(); },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 2000 }
+    err=>{toast('GPS error: '+err.message);stopGPS();},
+    {enableHighAccuracy:true,timeout:10000,maximumAge:2000}
   );
-  gpsActive = true;
-  document.getElementById('gps-status').textContent = '📍 Acquiring…';
-  document.getElementById('gps-status').className = 'active';
+  gpsActive=true;
+  document.getElementById('gps-label').textContent='Acquiring…';
+  document.getElementById('gps-status').classList.add('active');
 }
-
-function stopGPS() {
-  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-  watchId = null; gpsActive = false; lastGPS = null;
-  document.getElementById('gps-status').textContent = '📍 GPS Off';
-  document.getElementById('gps-status').className = '';
+function stopGPS(){
+  if(watchId!==null) navigator.geolocation.clearWatch(watchId);
+  watchId=null;gpsActive=false;lastGPS=null;
+  document.getElementById('gps-label').textContent='GPS Off';
+  document.getElementById('gps-status').classList.remove('active');
 }
 
 // ─── Storage ─────────────────────────────────────────────────────────────────
-function saveSessions() {
-  try { localStorage.setItem('hm-sessions', JSON.stringify(sessions)); } catch {}
+function saveSessions(){try{localStorage.setItem('hm-sessions',JSON.stringify(sessions));}catch{}}
+function loadSessions(){
+  try{const raw=localStorage.getItem('hm-sessions');if(raw) sessions=JSON.parse(raw);}catch{}
 }
 
-function loadSessions() {
-  try {
-    const raw = localStorage.getItem('hm-sessions');
-    if (raw) {
-      sessions = JSON.parse(raw);
-      // Restore typed arrays
-      sessions.forEach(s => {
-        if (s.targetKey && !ArrayBuffer.isView(s.targetKey)) {
-          s.targetKey = new Uint8Array(s.targetKey);
-        }
-      });
-    }
-  } catch {}
-}
-
-function renderSessionsList() {
-  const el = document.getElementById('sessions-list');
-  if (!sessions.length) {
-    el.innerHTML = '<div style="color:var(--muted);font-size:.85rem">No sessions saved yet</div>';
-    return;
-  }
-  el.innerHTML = sessions.map((s, i) => `
+function renderSessionsList(){
+  const el=document.getElementById('sessions-list');
+  const empty=document.getElementById('logs-empty');
+  if(!sessions.length){empty.style.display='flex';el.innerHTML='';return;}
+  empty.style.display='none';
+  el.innerHTML=sessions.map((s,i)=>`
     <div class="session-row">
-      <div>
+      <div class="session-row-info">
         <div class="name">${escHtml(s.name)}</div>
-        <div class="meta">${s.target} · ${s.pings.length} pings · ${new Date(s.startTime).toLocaleString()}</div>
+        <div class="meta">${escHtml(s.target)} &middot; ${s.pings.length} pings &middot; ${new Date(s.startTime).toLocaleString()}</div>
       </div>
       <div class="actions">
-        <button class="icon-btn" title="Rename" onclick="openRenameModal(${i})">✏️</button>
-        <button class="icon-btn" title="Export" onclick="exportSession(${i})">⬇</button>
-        <button class="icon-btn" title="Delete" onclick="deleteSession(${i})">🗑</button>
+        <button class="icon-btn" title="Rename" onclick="openRenameModal(${i})">${ICON_PENCIL}</button>
+        <button class="icon-btn" title="Export" onclick="exportSession(${i})">${ICON_DOWNLOAD}</button>
+        <button class="icon-btn" title="Delete" onclick="deleteSession(${i})">${ICON_TRASH}</button>
       </div>
-    </div>
-  `).join('');
+    </div>`).join('');
 }
 
-function deleteSession(idx) {
-  if (!confirm(`Delete "${sessions[idx].name}"?`)) return;
-  sessions.splice(idx, 1);
-  saveSessions();
-  renderSessionsList();
-  renderHeatmapChips();
-  selectedSessions = selectedSessions.filter(id => sessions.find(s => s.id === id));
+function deleteSession(idx){
+  if(!confirm(`Delete "${sessions[idx].name}"?`)) return;
+  sessions.splice(idx,1);saveSessions();
+  renderSessionsList();renderHeatmapChips();
+  selectedSessions=selectedSessions.filter(id=>sessions.find(s=>s.id===id));
   drawHeatmap();
 }
 
-function openRenameModal(idx) {
-  pendingRenameId = sessions[idx].id;
-  document.getElementById('rename-input').value = sessions[idx].name;
+function openRenameModal(idx){
+  pendingRenameId=sessions[idx].id;
+  document.getElementById('rename-input').value=sessions[idx].name;
   document.getElementById('rename-modal').classList.add('open');
   document.getElementById('rename-input').focus();
 }
-
-function closeRenameModal() {
-  document.getElementById('rename-modal').classList.remove('open');
-  pendingRenameId = null;
-}
-
-function confirmRename() {
-  const name = document.getElementById('rename-input').value.trim();
-  if (!name) return;
-  const s = sessions.find(s => s.id === pendingRenameId);
-  if (s) { s.name = name; saveSessions(); renderSessionsList(); renderHeatmapChips(); }
+function closeRenameModal(){document.getElementById('rename-modal').classList.remove('open');pendingRenameId=null;}
+function confirmRename(){
+  const name=document.getElementById('rename-input').value.trim();if(!name) return;
+  const s=sessions.find(s=>s.id===pendingRenameId);
+  if(s){s.name=name;saveSessions();renderSessionsList();renderHeatmapChips();}
   closeRenameModal();
 }
 
-function exportSession(idx) {
-  const s = sessions[idx];
-  const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `${s.name.replace(/[^a-z0-9]/gi, '_')}.json`;
-  a.click(); URL.revokeObjectURL(url);
+function exportSession(idx){
+  const s=sessions[idx];
+  const blob=new Blob([JSON.stringify(s,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=`${s.name.replace(/[^a-z0-9]/gi,'_')}.json`;a.click();URL.revokeObjectURL(url);
 }
-
-function exportCurrentSession() {
-  const ids = selectedSessions;
-  if (!ids.length) { toast('No session selected'); return; }
-  ids.forEach(id => {
-    const idx = sessions.findIndex(s => s.id === id);
-    if (idx !== -1) exportSession(idx);
-  });
+function exportCurrentSession(){
+  if(!selectedSessions.length){toast('No session selected');return;}
+  selectedSessions.forEach(id=>{const idx=sessions.findIndex(s=>s.id===id);if(idx!==-1) exportSession(idx);});
 }
-
-function exportAllSessions() {
-  if (!sessions.length) { toast('No sessions to export'); return; }
-  const blob = new Blob([JSON.stringify(sessions, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `meshcore_sessions_${Date.now()}.json`;
-  a.click(); URL.revokeObjectURL(url);
+function exportAllSessions(){
+  if(!sessions.length){toast('No sessions to export');return;}
+  const blob=new Blob([JSON.stringify(sessions,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=`meshcore_sessions_${Date.now()}.json`;a.click();URL.revokeObjectURL(url);
 }
-
-function importSession(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      let data = JSON.parse(e.target.result);
-      // Support both single session and array
-      if (!Array.isArray(data)) data = [data];
-      let imported = 0;
-      for (const s of data) {
-        if (!s.id || !s.pings) { toast('Invalid session file'); continue; }
-        // Avoid duplicates
-        if (!sessions.find(x => x.id === s.id)) {
-          sessions.push(s);
-          imported++;
-        }
+function importSession(event){
+  const file=event.target.files[0];if(!file) return;
+  const reader=new FileReader();
+  reader.onload=(e)=>{
+    try{
+      let data=JSON.parse(e.target.result);
+      if(!Array.isArray(data)) data=[data];
+      let imported=0;
+      for(const s of data){
+        if(!s.id||!s.pings){toast('Invalid session file');continue;}
+        if(!sessions.find(x=>x.id===s.id)){sessions.push(s);imported++;}
       }
-      saveSessions();
-      renderSessionsList();
-      renderHeatmapChips();
+      saveSessions();renderSessionsList();renderHeatmapChips();
       toast(`Imported ${imported} session(s)`);
-    } catch { toast('Invalid JSON file'); }
+    }catch{toast('Invalid JSON file');}
   };
   reader.readAsText(file);
-  event.target.value = '';
+  event.target.value='';
 }
-
-function clearAllData() {
-  if (!confirm('Delete ALL sessions? This cannot be undone.')) return;
-  sessions = []; selectedSessions = [];
-  saveSessions();
-  renderSessionsList();
-  renderHeatmapChips();
-  drawHeatmap();
+function clearAllData(){
+  if(!confirm('Delete ALL sessions? This cannot be undone.')) return;
+  sessions=[];selectedSessions=[];
+  saveSessions();renderSessionsList();renderHeatmapChips();drawHeatmap();
   toast('All data cleared');
 }
 
 // ─── Heatmap ─────────────────────────────────────────────────────────────────
-function renderHeatmapChips() {
-  const el = document.getElementById('heatmap-sessions');
-  if (!sessions.length) {
-    el.innerHTML = '<div style="color:var(--muted);font-size:.85rem">No sessions recorded yet</div>';
-    return;
-  }
-  el.innerHTML = sessions.map(s => {
-    const isA = selectedSessions[0] === s.id;
-    const isB = selectedSessions[1] === s.id;
-    let cls = isA ? 'active-a' : isB ? 'active-b' : '';
-    const tag = isA ? '<span class="ab-tag a">A</span>' : isB ? '<span class="ab-tag b">B</span>' : '';
-    return `<div class="session-chip ${cls}" onclick="toggleHeatmapSession('${s.id}')">${tag} ${escHtml(s.name)}</div>`;
+function renderHeatmapChips(){
+  const el=document.getElementById('heatmap-sessions');
+  if(!sessions.length){el.innerHTML='';return;}
+  el.innerHTML=sessions.map(s=>{
+    const isA=selectedSessions[0]===s.id,isB=selectedSessions[1]===s.id;
+    const cls=isA?'active-a':isB?'active-b':'';
+    const tag=isA?'<span class="ab-tag a">A</span>':isB?'<span class="ab-tag b">B</span>':'';
+    return `<div class="session-chip ${cls}" onclick="toggleHeatmapSession('${s.id}')">${tag}${escHtml(s.name)}</div>`;
   }).join('');
 }
 
-function toggleHeatmapSession(id) {
-  if (selectedSessions[0] === id) {
-    selectedSessions = selectedSessions.filter(x => x !== id);
-  } else if (selectedSessions[1] === id) {
-    selectedSessions = selectedSessions.filter(x => x !== id);
-  } else if (selectedSessions.length < 2) {
-    selectedSessions.push(id);
-  } else {
-    selectedSessions = [selectedSessions[1], id];
-  }
-  renderHeatmapChips();
+function toggleHeatmapSession(id){
+  if(selectedSessions[0]===id||selectedSessions[1]===id) selectedSessions=selectedSessions.filter(x=>x!==id);
+  else if(selectedSessions.length<2) selectedSessions.push(id);
+  else selectedSessions=[selectedSessions[1],id];
+  renderHeatmapChips();drawHeatmap();
+}
+
+function toggleHeatmapMode(){
+  heatmapMode=heatmapMode==='snr'?'rssi':'snr';
+  document.getElementById('heatmap-mode-btn').textContent=heatmapMode.toUpperCase();
   drawHeatmap();
 }
 
-function toggleHeatmapMode() {
-  heatmapMode = heatmapMode === 'snr' ? 'rssi' : 'snr';
-  document.getElementById('heatmap-mode-btn').textContent = 'Mode: ' + heatmapMode.toUpperCase();
-  drawHeatmap();
-}
-
-function snrToColor(snr, alpha = 0.85) {
-  // Green > 0dB, Yellow -5 to 0, Orange -10 to -5, Red < -10
-  if (snr === null || snr === undefined) return `rgba(100,100,100,${alpha})`;
-  if (snr > 0) return `rgba(74,222,128,${alpha})`;
-  if (snr > -5) return `rgba(250,204,21,${alpha})`;
-  if (snr > -10) return `rgba(249,115,22,${alpha})`;
+function snrToColor(snr,alpha=0.85){
+  if(snr==null) return `rgba(100,100,100,${alpha})`;
+  if(snr>0) return `rgba(74,222,128,${alpha})`;
+  if(snr>-5) return `rgba(250,204,21,${alpha})`;
+  if(snr>-10) return `rgba(249,115,22,${alpha})`;
   return `rgba(239,68,68,${alpha})`;
 }
-
-function rssiToColor(rssi, alpha = 0.85) {
-  if (rssi === null || rssi === undefined) return `rgba(100,100,100,${alpha})`;
-  if (rssi > -80) return `rgba(74,222,128,${alpha})`;
-  if (rssi > -100) return `rgba(250,204,21,${alpha})`;
-  if (rssi > -115) return `rgba(249,115,22,${alpha})`;
+function rssiToColor(rssi,alpha=0.85){
+  if(rssi==null) return `rgba(100,100,100,${alpha})`;
+  if(rssi>-80) return `rgba(74,222,128,${alpha})`;
+  if(rssi>-100) return `rgba(250,204,21,${alpha})`;
+  if(rssi>-115) return `rgba(249,115,22,${alpha})`;
   return `rgba(239,68,68,${alpha})`;
 }
+function getPointColor(ping,alpha){return heatmapMode==='snr'?snrToColor(ping.snr,alpha):rssiToColor(ping.rssi,alpha);}
 
-function getPointColor(ping, alpha) {
-  if (heatmapMode === 'snr') return snrToColor(ping.snr, alpha);
-  return rssiToColor(ping.rssi, alpha);
-}
+function drawHeatmap(){
+  const canvas=document.getElementById('map-canvas');
+  const wrap=document.getElementById('map-wrap');
+  const noData=document.getElementById('no-data-msg');
+  const compareLabel=document.getElementById('compare-label');
+  canvas.width=wrap.clientWidth;canvas.height=wrap.clientHeight;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-function drawHeatmap() {
-  const canvas = document.getElementById('map-canvas');
-  const wrap = document.getElementById('map-wrap');
-  const noData = document.getElementById('no-data-msg');
-  const compareLabel = document.getElementById('compare-label');
-  canvas.width = wrap.clientWidth;
-  canvas.height = wrap.clientHeight;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const activeSessions=selectedSessions.map(id=>sessions.find(s=>s.id===id)).filter(Boolean);
+  if(!activeSessions.length){noData.style.display='flex';compareLabel.style.display='none';return;}
+  noData.style.display='none';
 
-  const activeSessions = selectedSessions.map(id => sessions.find(s => s.id === id)).filter(Boolean);
-  if (!activeSessions.length) {
-    noData.style.display = 'flex';
-    compareLabel.style.display = 'none';
-    return;
-  }
-  noData.style.display = 'none';
-
-  // Gather all GPS points from all active sessions
-  const allPoints = [];
-  activeSessions.forEach((s, si) => {
-    s.pings.filter(p => p.lat !== null && p.lon !== null).forEach(p => {
-      allPoints.push({ ...p, sessionIdx: si });
-    });
+  const allPoints=[];
+  activeSessions.forEach((s,si)=>{
+    s.pings.filter(p=>p.lat!==null&&p.lon!==null).forEach(p=>{allPoints.push({...p,sessionIdx:si});});
   });
 
-  if (!allPoints.length) {
-    // No GPS data — render a timeline bar instead
-    drawTimelineMode(ctx, canvas, activeSessions);
-    compareLabel.style.display = 'none';
-    return;
-  }
+  if(!allPoints.length){drawTimelineMode(ctx,canvas,activeSessions);compareLabel.style.display='none';return;}
 
-  // Compute bounding box
-  let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
-  allPoints.forEach(p => {
-    minLat = Math.min(minLat, p.lat); maxLat = Math.max(maxLat, p.lat);
-    minLon = Math.min(minLon, p.lon); maxLon = Math.max(maxLon, p.lon);
+  let minLat=Infinity,maxLat=-Infinity,minLon=Infinity,maxLon=-Infinity;
+  allPoints.forEach(p=>{minLat=Math.min(minLat,p.lat);maxLat=Math.max(maxLat,p.lat);minLon=Math.min(minLon,p.lon);maxLon=Math.max(maxLon,p.lon);});
+  const padFrac=0.15,dLat=(maxLat-minLat)||0.0005,dLon=(maxLon-minLon)||0.0005;
+  minLat-=dLat*padFrac;maxLat+=dLat*padFrac;minLon-=dLon*padFrac;maxLon+=dLon*padFrac;
+
+  const W=canvas.width,H=canvas.height;
+  const scaleX=W/(maxLon-minLon),scaleY=H/(maxLat-minLat);
+  const mapScale=Math.min(scaleX,scaleY)*mapState.scale;
+  const offsetX=(W-(maxLon-minLon)*mapScale)/2+mapState.panX;
+  const offsetY=(H-(maxLat-minLat)*mapScale)/2+mapState.panY;
+  const toCanvas=(lat,lon)=>({x:(lon-minLon)*mapScale+offsetX,y:H-((lat-minLat)*mapScale+offsetY)});
+
+  allPoints.forEach(p=>{
+    const{x,y}=toCanvas(p.lat,p.lon);
+    const r=Math.max(20,40*mapState.scale);
+    const grad=ctx.createRadialGradient(x,y,0,x,y,r);
+    const col=getPointColor(p,0.5);
+    grad.addColorStop(0,col);
+    grad.addColorStop(1,col.replace(',0.5)',',0)'));
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=grad;ctx.fill();
   });
 
-  const padFrac = 0.15;
-  const dLat = (maxLat - minLat) || 0.0005;
-  const dLon = (maxLon - minLon) || 0.0005;
-  minLat -= dLat * padFrac; maxLat += dLat * padFrac;
-  minLon -= dLon * padFrac; maxLon += dLon * padFrac;
-
-  const W = canvas.width, H = canvas.height;
-  const scaleX = W / (maxLon - minLon);
-  const scaleY = H / (maxLat - minLat);
-  const mapScale = Math.min(scaleX, scaleY) * mapState.scale;
-  const offsetX = (W - (maxLon - minLon) * mapScale) / 2 + mapState.panX;
-  const offsetY = (H - (maxLat - minLat) * mapScale) / 2 + mapState.panY;
-
-  const toCanvas = (lat, lon) => ({
-    x: (lon - minLon) * mapScale + offsetX,
-    y: H - ((lat - minLat) * mapScale + offsetY),
-  });
-
-  // Draw heatmap blobs
-  allPoints.forEach(p => {
-    const { x, y } = toCanvas(p.lat, p.lon);
-    const r = Math.max(20, 40 * mapState.scale);
-    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-    // For A/B: A uses normal colors, B uses slightly shifted hue overlay
-    const col = getPointColor(p, 0.5);
-    // For the second session in compare mode, tint differently
-    if (p.sessionIdx === 1) {
-      grad.addColorStop(0, col.replace(',0.5)', ',0.6)'));
-      grad.addColorStop(1, col.replace(',0.5)', ',0)'));
-    } else {
-      grad.addColorStop(0, col);
-      grad.addColorStop(1, col.replace(',0.5)', ',0)'));
-    }
+  activeSessions.forEach((s,si)=>{
+    const pts=s.pings.filter(p=>p.lat!==null&&p.lon!==null);
+    if(pts.length<2) return;
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = grad;
-    ctx.fill();
-  });
-
-  // Draw dots on top
-  allPoints.forEach(p => {
-    const { x, y } = toCanvas(p.lat, p.lon);
-    ctx.beginPath();
-    ctx.arc(x, y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = getPointColor(p, 1);
-    ctx.fill();
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // A/B badge
-    if (activeSessions.length > 1) {
-      ctx.fillStyle = p.sessionIdx === 0 ? '#38bdf8' : '#818cf8';
-      ctx.beginPath();
-      ctx.arc(x + 5, y - 5, 4, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  });
-
-  // Draw path line per session
-  activeSessions.forEach((s, si) => {
-    const pts = s.pings.filter(p => p.lat !== null && p.lon !== null);
-    if (pts.length < 2) return;
-    ctx.beginPath();
-    ctx.strokeStyle = si === 0 ? 'rgba(56,189,248,0.3)' : 'rgba(129,140,248,0.3)';
-    ctx.lineWidth = 1.5;
-    pts.forEach((p, i) => {
-      const { x, y } = toCanvas(p.lat, p.lon);
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
+    ctx.strokeStyle=si===0?'rgba(56,189,248,0.25)':'rgba(129,140,248,0.25)';
+    ctx.lineWidth=1.5;
+    pts.forEach((p,i)=>{const{x,y}=toCanvas(p.lat,p.lon);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
     ctx.stroke();
   });
 
-  // Compare label
-  if (activeSessions.length === 2) {
-    compareLabel.style.display = 'block';
-    compareLabel.innerHTML = `<span class="ab-tag a">A</span> ${escHtml(activeSessions[0].name)} &nbsp; <span class="ab-tag b">B</span> ${escHtml(activeSessions[1].name)}`;
-  } else {
-    compareLabel.style.display = 'none';
-  }
+  allPoints.forEach(p=>{
+    const{x,y}=toCanvas(p.lat,p.lon);
+    ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);
+    ctx.fillStyle=getPointColor(p,1);ctx.fill();
+    ctx.strokeStyle='#0a0f1e';ctx.lineWidth=1.5;ctx.stroke();
+    if(activeSessions.length>1){
+      ctx.fillStyle=p.sessionIdx===0?'#38bdf8':'#818cf8';
+      ctx.beginPath();ctx.arc(x+5,y-5,4,0,Math.PI*2);ctx.fill();
+    }
+  });
+
+  if(activeSessions.length===2){
+    compareLabel.style.display='block';
+    compareLabel.innerHTML=`<span class="ab-tag a">A</span> ${escHtml(activeSessions[0].name)} &nbsp; <span class="ab-tag b">B</span> ${escHtml(activeSessions[1].name)}`;
+  }else{compareLabel.style.display='none';}
 }
 
-function drawTimelineMode(ctx, canvas, activeSessions) {
-  const W = canvas.width, H = canvas.height;
-  const colors = ['rgba(56,189,248,', 'rgba(129,140,248,'];
-  const pad = 40, barH = Math.min(60, (H - pad * 2) / activeSessions.length - 20);
-
-  ctx.fillStyle = 'var(--muted)';
-  ctx.font = '13px Inter,system-ui,sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#94a3b8';
-  ctx.fillText('No GPS data — showing ping timeline', W / 2, 30);
-
-  activeSessions.forEach((s, si) => {
-    const pings = s.pings;
-    if (!pings.length) return;
-    const y = pad + 40 + si * (barH + 30);
-    const xStep = (W - pad * 2) / Math.max(pings.length - 1, 1);
-
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(pad, y, W - pad * 2, barH);
-
-    // Draw ping bars
-    pings.forEach((p, i) => {
-      const x = pad + i * xStep;
-      const col = getPointColor(p, 0.9);
-      ctx.fillStyle = col;
-      const h = p.rtt !== null ? Math.max(4, barH * (1 - p.rtt / 3000)) : 4;
-      ctx.fillRect(x - 2, y + barH - h, 4, h);
+function drawTimelineMode(ctx,canvas,activeSessions){
+  const W=canvas.width,H=canvas.height;
+  const colors=['rgba(56,189,248,','rgba(129,140,248,'];
+  const pad=40,barH=Math.min(60,(H-pad*2)/activeSessions.length-20);
+  ctx.fillStyle='#64748b';ctx.font='13px system-ui';ctx.textAlign='center';
+  ctx.fillText('No GPS data — showing ping timeline',W/2,30);
+  activeSessions.forEach((s,si)=>{
+    const pings=s.pings;if(!pings.length) return;
+    const y=pad+40+si*(barH+30);
+    const xStep=(W-pad*2)/Math.max(pings.length-1,1);
+    ctx.fillStyle='#1a2332';ctx.fillRect(pad,y,W-pad*2,barH);
+    pings.forEach((p,i)=>{
+      const x=pad+i*xStep;
+      ctx.fillStyle=getPointColor(p,0.9);
+      const h=p.rtt!==null?Math.max(4,barH*(1-p.rtt/3000)):4;
+      ctx.fillRect(x-2,y+barH-h,4,h);
     });
-
-    // Label
-    ctx.fillStyle = colors[si] + '1)';
-    ctx.textAlign = 'left';
-    ctx.font = '11px Inter,system-ui,sans-serif';
-    ctx.fillText(s.name, pad, y - 5);
+    ctx.fillStyle=colors[si]+'1)';ctx.textAlign='left';ctx.font='11px system-ui';
+    ctx.fillText(s.name,pad,y-5);
   });
 }
 
-function resetMapView() {
-  mapState = { panX: 0, panY: 0, scale: 1 };
-  drawHeatmap();
-}
+function resetMapView(){mapState={panX:0,panY:0,scale:1};drawHeatmap();}
 
-// Map pan & zoom
-const mapCanvas = document.getElementById('map-canvas');
-mapCanvas.addEventListener('mousedown', e => {
-  mapDragging = true;
-  mapDragStart = { x: e.clientX, y: e.clientY };
-  mapPanStart = { x: mapState.panX, y: mapState.panY };
+// Map interaction
+const mapCanvas=document.getElementById('map-canvas');
+mapCanvas.addEventListener('mousedown',e=>{
+  mapDragging=true;mapDragStart={x:e.clientX,y:e.clientY};mapPanStart={x:mapState.panX,y:mapState.panY};
   mapCanvas.classList.add('panning');
 });
-window.addEventListener('mousemove', e => {
-  if (!mapDragging) return;
-  mapState.panX = mapPanStart.x + (e.clientX - mapDragStart.x);
-  mapState.panY = mapPanStart.y + (e.clientY - mapDragStart.y);
+window.addEventListener('mousemove',e=>{
+  if(!mapDragging) return;
+  mapState.panX=mapPanStart.x+(e.clientX-mapDragStart.x);
+  mapState.panY=mapPanStart.y+(e.clientY-mapDragStart.y);
   drawHeatmap();
 });
-window.addEventListener('mouseup', () => { mapDragging = false; mapCanvas.classList.remove('panning'); });
-mapCanvas.addEventListener('wheel', e => {
+window.addEventListener('mouseup',()=>{mapDragging=false;mapCanvas.classList.remove('panning');});
+mapCanvas.addEventListener('wheel',e=>{
   e.preventDefault();
-  const factor = e.deltaY < 0 ? 1.1 : 0.9;
-  mapState.scale = Math.max(0.3, Math.min(20, mapState.scale * factor));
+  mapState.scale=Math.max(0.3,Math.min(20,mapState.scale*(e.deltaY<0?1.1:0.9)));
   drawHeatmap();
-}, { passive: false });
+},{passive:false});
 
-let touchStart = null;
-mapCanvas.addEventListener('touchstart', e => {
-  if (e.touches.length === 1) {
-    touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, panX: mapState.panX, panY: mapState.panY };
-  }
-}, { passive: true });
-mapCanvas.addEventListener('touchmove', e => {
-  if (e.touches.length === 1 && touchStart) {
+let touchStart=null;
+mapCanvas.addEventListener('touchstart',e=>{
+  if(e.touches.length===1) touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY,panX:mapState.panX,panY:mapState.panY};
+},{passive:true});
+mapCanvas.addEventListener('touchmove',e=>{
+  if(e.touches.length===1&&touchStart){
     e.preventDefault();
-    mapState.panX = touchStart.panX + (e.touches[0].clientX - touchStart.x);
-    mapState.panY = touchStart.panY + (e.touches[0].clientY - touchStart.y);
+    mapState.panX=touchStart.panX+(e.touches[0].clientX-touchStart.x);
+    mapState.panY=touchStart.panY+(e.touches[0].clientY-touchStart.y);
     drawHeatmap();
   }
-}, { passive: false });
-mapCanvas.addEventListener('touchend', () => { touchStart = null; });
+},{passive:false});
+mapCanvas.addEventListener('touchend',()=>{touchStart=null;});
 
 // ─── Resize ──────────────────────────────────────────────────────────────────
 let resizeTimer;
-window.addEventListener('resize', () => {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(drawHeatmap, 100);
-});
+window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(drawHeatmap,100);});
 
 // ─── Navigation ──────────────────────────────────────────────────────────────
-function showPage(name, btn) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-  document.getElementById('page-' + name).classList.add('active');
+function showPage(name,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
   btn.classList.add('active');
-  if (name === 'heatmap') setTimeout(drawHeatmap, 50);
+  if(name==='heatmap') setTimeout(drawHeatmap,50);
 }
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
-function escHtml(str) {
-  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
-function arrEq(a, b) {
-  if (!a || !b || a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
+function escHtml(str){return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 let toastTimer;
-function toast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2800);
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
@@ -1229,9 +1119,8 @@ loadSessions();
 renderSessionsList();
 renderHeatmapChips();
 
-// PWA SW
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
 </script>
 </body>
