@@ -2,7 +2,7 @@
   "name": "MeshCore Heatmapper",
   "short_name": "Heatmapper",
   "description": "MeshCore BLE range test & heatmap tool",
-  "start_url": "/",
+  "start_url": "https://benbaptist.github.io/meshcore-heatmapper",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
