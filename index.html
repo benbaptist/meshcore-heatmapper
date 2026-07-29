@@ -399,6 +399,7 @@
           <div class="legend-row"><div class="legend-dot" style="background:#f97316"></div>Weak &minus;10&ndash;&minus;5 dB</div>
           <div class="legend-row"><div class="legend-dot" style="background:#ef4444"></div>Poor &lt;&minus;10 dB</div>
         </div>
+        <div id="osm-attr" style="position:absolute;bottom:10px;left:10px;font-size:.62rem;color:var(--muted);background:rgba(10,15,30,.7);padding:2px 6px;border-radius:3px;pointer-events:none">&copy; OpenStreetMap contributors</div>
         <div id="compare-label"></div>
       </div>
     </div>
@@ -502,6 +503,9 @@ let selectedSessions=[];
 let mapState={panX:0,panY:0,scale:1};
 let pendingRenameId=null;
 let mapDragging=false,mapDragStart={x:0,y:0},mapPanStart={x:0,y:0};
+const tileCache=new Map();
+const TILE_SIZE=256;
+const TILE_URL=(z,x,y)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 
 // ─── Sub-view nav ───────────────────────────────────────────────────────────
 function showSubView(name){
@@ -995,7 +999,57 @@ function drawHeatmap(){
   const mapScale=Math.min(scaleX,scaleY)*mapState.scale;
   const offsetX=(W-(maxLon-minLon)*mapScale)/2+mapState.panX;
   const offsetY=(H-(maxLat-minLat)*mapScale)/2+mapState.panY;
-  const toCanvas=(lat,lon)=>({x:(lon-minLon)*mapScale+offsetX,y:H-((lat-minLat)*mapScale+offsetY)});
+  const toCanvas=(lat,lon)=>({x:(lon-minLon)*mapScale+offsetX,y:H-(lat-minLat)*mapScale+offsetY});
+
+  // ── Draw OSM tiles ──────────────────────────────────────────────────
+  const z=Math.round(Math.log2(mapScale*360/TILE_SIZE));
+  const zoom=Math.max(2,Math.min(18,z));
+  const n=1<<zoom;
+  const latToTileY=lat=>{const r=Math.PI/180;const c=Math.max(-85,Math.min(85,lat));return (1-Math.log(Math.tan(c*r)+1/Math.cos(c*r))/Math.PI)*n/2;};
+  const tileYToLat=ty=>{const r=180/Math.PI;return Math.atan(Math.sinh(Math.PI*(1-2*ty/n)))*r;};
+  const lonToTileX=lon=>(lon+180)/360*n;
+  const tileXToLon=tx=>tx/n*360-180;
+
+  // Inverse: canvas → lat/lon
+  const invProj=(cx,cy)=>({lon:(cx-offsetX)/mapScale+minLon,lat:(H-cy+offsetY)/mapScale+minLat});
+
+  // Get visible tile range (use min/max to handle any pan direction)
+  const nw=invProj(0,0),se=invProj(W,H);
+  const tx0=Math.min(Math.floor(lonToTileX(nw.lon)),Math.floor(lonToTileX(se.lon)));
+  const ty0=Math.min(Math.floor(latToTileY(nw.lat)),Math.floor(latToTileY(se.lat)));
+  const tx1=Math.max(Math.floor(lonToTileX(nw.lon)),Math.floor(lonToTileX(se.lon)));
+  const ty1=Math.max(Math.floor(latToTileY(nw.lat)),Math.floor(latToTileY(se.lat)));
+
+  for(let ty=ty0;ty<=ty1;ty++){
+    for(let tx=tx0;tx<=tx1;tx++){
+      const key=`${zoom}/${tx}/${ty}`;
+      let img=tileCache.get(key);
+      if(!img){
+        img=new Image();
+        img.crossOrigin='anonymous';
+        const wrapTx=((tx%n)+n)%n,wrapTy=((ty%n)+n)%n;
+        img.src=TILE_URL(zoom,wrapTx,wrapTy);
+        tileCache.set(key,img);
+        img.onload=()=>drawHeatmap();
+        continue;
+      }
+      if(!img.complete||img.naturalWidth===0) continue;
+      const tNW={lat:tileYToLat(ty),lon:tileXToLon(tx)};
+      const tSE={lat:tileYToLat(ty+1),lon:tileXToLon(tx+1)};
+      const cNW=toCanvas(tNW.lat,tNW.lon);
+      const cSE=toCanvas(tSE.lat,tSE.lon);
+      const cx=cNW.x,cy=cNW.y,cw=cSE.x-cNW.x,ch=cSE.y-cNW.y;
+      if(cx+cw<0||cy+ch<0||cx>W||cy>H) continue;
+      ctx.globalAlpha=0.45;
+      ctx.drawImage(img,cx,cy,cw,ch);
+      ctx.globalAlpha=1;
+    }
+  }
+  // Dark overlay for heatmap readability
+  ctx.fillStyle='rgba(10,15,30,0.35)';
+  ctx.fillRect(0,0,W,H);
+
+  // ── Draw heatmap points ──────────────────────────────────────────────
 
   allPoints.forEach(p=>{
     const{x,y}=toCanvas(p.lat,p.lon);
