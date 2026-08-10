@@ -723,13 +723,26 @@ function getSettingBool(id){
   if(storedSettings[id]!==undefined) return !!storedSettings[id];
   const el=document.getElementById(id);return !!(el&&el.checked);
 }
-function commitSetting(id){
-  const el=document.getElementById(id);if(!el) return;
-  storedSettings[id]=el.type==='checkbox'?el.checked:el.value;
+function commitSetting(id,el){
+  if(!el) el=document.getElementById(id);
+  if(!el) return;
+  const key=el.id||id;
+  if(el.type==='checkbox') storedSettings[key]=el.checked;
+  else if(el.type==='radio') storedSettings[el.name]=el.value;
+  else storedSettings[key]=el.value;
   saveSettings(storedSettings);
 }
 function applyStoredSettings(){
   for(const[id,val]of Object.entries(storedSettings)){
+    // Radio group: stored under the group name, not any single input id
+    const radioMatch=document.querySelector(`input[name="${id}"]`);
+    if(radioMatch){
+      if(radioMatch.type==='radio'){
+        const target=document.querySelector(`input[name="${id}"][value="${val}"]`);
+        if(target) target.checked=true;
+      }
+      continue;
+    }
     const el=document.getElementById(id);if(!el) continue;
     if(el.type==='checkbox') el.checked=!!val;
     else el.value=val;
@@ -1401,8 +1414,7 @@ loadSessions();
 renderSessionsList();
 applyStoredSettings();
 document.querySelectorAll('#page-settings input, #page-settings select').forEach(el=>{
-  if(el.type==='radio') el.addEventListener('change',()=>commitSetting(el.name||el.id));
-  else el.addEventListener('change',()=>commitSetting(el.id));
+  el.addEventListener('change',()=>commitSetting(el.id||el.name,el));
 });
 ['setting-show-dots','setting-fixed-interval'].forEach(id=>{
   const el=document.getElementById(id);
