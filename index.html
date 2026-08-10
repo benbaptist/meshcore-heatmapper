@@ -1396,7 +1396,7 @@ function showPage(name,btn){
   document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   btn.classList.add('active');
-  if(name==='heatmap') setTimeout(drawHeatmap,50);
+  if(name==='heatmap'){renderHeatmapSelects();setTimeout(drawHeatmap,50);}
 }
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
@@ -1412,6 +1412,7 @@ function toast(msg){
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 loadSessions();
 renderSessionsList();
+renderHeatmapChips();
 applyStoredSettings();
 document.querySelectorAll('#page-settings input, #page-settings select').forEach(el=>{
   el.addEventListener('change',()=>commitSetting(el.id||el.name,el));
