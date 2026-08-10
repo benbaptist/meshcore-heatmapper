@@ -798,7 +798,7 @@ async function startSession(){
 
 async function stopSession(){
   if(!sessionActive) return;
-  sessionActive=false;clearTimeout(pingTimer);pingTimer=null;
+  sessionActive=false;pingInflight=false;clearTimeout(pingTimer);pingTimer=null;
   updateBanner('idle');
   document.getElementById('start-btn').disabled=!connected||!selectedContact;
   document.getElementById('stop-btn').disabled=true;
@@ -812,12 +812,30 @@ async function stopSession(){
 
 function schedulePing(){if(sessionActive) doPing();}
 
+let pingInflight=false;
+
 async function doPing(){
   if(!sessionActive) return;
-  updateBanner('sending');
+  if(pingInflight){
+    // Adaptive mode (default): a previous ping is still resolving — wait for it via the timer set at the bottom of the previous call.
+    return;
+  }
   const interval=getSetting('setting-interval');
+  const fixedInterval=getSettingBool('setting-fixed-interval');
+
+  // Fixed-interval mode: schedule the NEXT ping BEFORE awaiting the current one
+  // so the cadence is rigid even when responses are slow.
+  if(fixedInterval){
+    if(sessionActive) pingTimer=setTimeout(schedulePing,interval);
+  }
+
+  pingInflight=true;
+  updateBanner('sending');
   let result=null;
   try{result=await sendPing(selectedContact);pingSuccess++;}catch(e){}
+  pingInflight=false;
+  if(!sessionActive) return;
+
   pingCount++;
   const gpsData=gpsActive?lastGPS:null;
   if(result){
@@ -833,7 +851,11 @@ async function doPing(){
   }
   document.getElementById('banner-count-num').textContent=pingCount;
   document.getElementById('stat-success').textContent=(pingCount>0?Math.round(pingSuccess/pingCount*100):0)+'%';
-  if(sessionActive) pingTimer=setTimeout(schedulePing,interval);
+
+  // Adaptive mode (default): only schedule the next ping after the current one resolves.
+  if(!fixedInterval){
+    if(sessionActive) pingTimer=setTimeout(schedulePing,interval);
+  }
 }
 
 function updateBanner(state){
