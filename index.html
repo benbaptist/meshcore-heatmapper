@@ -176,15 +176,16 @@
 
   /* ── Heatmap page ── */
   #page-heatmap{gap:8px;padding:10px 14px}
+  /* Session selects on heatmap page */
   #heatmap-chips-row{display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;align-items:center}
-  #heatmap-hint{font-size:.78rem;color:var(--muted)}
-  .session-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;background:var(--surface2);border:2px solid var(--border);cursor:pointer;font-size:.78rem;font-weight:600;transition:all .15s;white-space:nowrap}
-  .session-chip:hover{border-color:var(--accent)}
-  .session-chip.active-a{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
-  .session-chip.active-b{border-color:var(--accent2);color:var(--accent2);background:var(--accent2-dim)}
-  .ab-tag{display:inline-flex;width:14px;height:14px;border-radius:4px;font-size:.62rem;font-weight:800;text-align:center;align-items:center;justify-content:center;flex-shrink:0}
-  .ab-tag.a{background:var(--accent);color:var(--bg)}
-  .ab-tag.b{background:var(--accent2);color:var(--bg)}
+  #heatmap-hint{font-size:.78rem;color:var(--muted);width:100%}
+  .session-select{padding:6px 10px;background:var(--surface2);border:2px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:.8rem;font-weight:600;outline:none;cursor:pointer;min-width:140px;max-width:200px;transition:border-color .15s}
+  .session-select:focus{border-color:var(--accent)}
+  #heatmap-select-a{border-color:var(--accent)}
+  #heatmap-select-a:not(:disabled):hover{border-color:var(--accent)}
+  #heatmap-select-b{border-color:var(--accent2)}
+  #heatmap-select-b:not(:disabled):hover{border-color:var(--accent2)}
+  #heatmap-select-b:disabled{opacity:.45;cursor:not-allowed}
 
   #map-toolbar{display:flex;gap:6px;align-items:center;flex-shrink:0;flex-wrap:wrap}
   #map-toolbar-spacer{flex:1}
@@ -367,8 +368,10 @@
     <!-- HEATMAP PAGE -->
     <div id="page-heatmap" class="page">
       <div id="heatmap-chips-row">
-        <span id="heatmap-hint">Tap a session to view, two to compare</span>
-        <div id="heatmap-sessions" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <span id="heatmap-hint">Select a session to view. Add a second to compare.</span>
+        <select id="heatmap-select-a" class="session-select" onchange="onHeatmapSelectChange('a')" aria-label="View session A"><option value="">— none —</option></select>
+        <select id="heatmap-select-b" class="session-select" onchange="onHeatmapSelectChange('b')" aria-label="Compare with session B" disabled><option value="">— compare with —</option></select>
+        <button class="btn btn-secondary btn-sm" id="heatmap-clear-btn" onclick="clearHeatmapSelection()">Clear</button>
       </div>
       <div id="map-toolbar">
         <button class="btn btn-secondary btn-sm" onclick="resetMapView()">
@@ -975,22 +978,63 @@ function clearAllData(){
 }
 
 // ─── Heatmap ─────────────────────────────────────────────────────────────────
-function renderHeatmapChips(){
-  const el=document.getElementById('heatmap-sessions');
-  if(!sessions.length){el.innerHTML='';return;}
-  el.innerHTML=sessions.map(s=>{
-    const isA=selectedSessions[0]===s.id,isB=selectedSessions[1]===s.id;
-    const cls=isA?'active-a':isB?'active-b':'';
-    const tag=isA?'<span class="ab-tag a">A</span>':isB?'<span class="ab-tag b">B</span>':'';
-    return `<div class="session-chip ${cls}" onclick="toggleHeatmapSession('${s.id}')">${tag}${escHtml(s.name)}</div>`;
-  }).join('');
+function renderHeatmapChips(){renderHeatmapSelects();}
+
+function renderHeatmapSelects(){
+  const legacyEl=document.getElementById('heatmap-sessions');
+  if(legacyEl) legacyEl.innerHTML='';
+  const aSel=document.getElementById('heatmap-select-a');
+  const bSel=document.getElementById('heatmap-select-b');
+  if(!aSel||!bSel) return;
+  const prevA=aSel.value,prevB=bSel.value;
+  const opts=sessions.map(s=>`<option value="${s.id}">${escHtml(s.name)}</option>`).join('');
+  aSel.innerHTML='<option value="">— none —</option>'+opts;
+  bSel.innerHTML='<option value="">— compare with —</option>'+opts;
+  aSel.value=selectedSessions[0]||prevA||'';
+  bSel.value=selectedSessions[1]||prevB||'';
+  bSel.disabled=!selectedSessions[0];
 }
 
+function onHeatmapSelectChange(which){
+  const aSel=document.getElementById('heatmap-select-a');
+  const bSel=document.getElementById('heatmap-select-b');
+  if(which==='a'){
+    selectedSessions[0]=aSel.value||null;
+    if(!selectedSessions[0]) selectedSessions=[];
+    else if(selectedSessions[1]===selectedSessions[0]){
+      selectedSessions[1]=null;bSel.value='';
+    }
+  }else{
+    if(!bSel.value){selectedSessions[1]=null;}
+    else{
+      if(selectedSessions[1]){}// already set
+      selectedSessions[1]=bSel.value;
+    }
+  }
+  selectedSessions=selectedSessions.filter(Boolean);
+  // keep canonical ordering: index 0 = A, index 1 = B
+  selectedSessions=selectedSessions.slice(0,2);
+  bSel.disabled=!selectedSessions[0];
+  drawHeatmap();
+}
+
+function clearHeatmapSelection(){
+  selectedSessions=[];
+  renderHeatmapSelects();
+  drawHeatmap();
+}
+
+// Backwards-compatible shim — used by external callers if any.
 function toggleHeatmapSession(id){
-  if(selectedSessions[0]===id||selectedSessions[1]===id) selectedSessions=selectedSessions.filter(x=>x!==id);
-  else if(selectedSessions.length<2) selectedSessions.push(id);
-  else selectedSessions=[selectedSessions[1],id];
-  renderHeatmapChips();drawHeatmap();
+  if(selectedSessions[0]===id||selectedSessions[1]===id){
+    selectedSessions=selectedSessions.filter(x=>x!==id);
+  }else if(selectedSessions.length<2){
+    selectedSessions.push(id);
+  }else{
+    selectedSessions=[selectedSessions[1],id];
+  }
+  renderHeatmapSelects();
+  drawHeatmap();
 }
 
 function toggleHeatmapMode(){
