@@ -1022,20 +1022,15 @@ function onHeatmapSelectChange(which){
   const bSel=document.getElementById('heatmap-select-b');
   if(which==='a'){
     selectedSessions[0]=aSel.value||null;
-    if(!selectedSessions[0]) selectedSessions=[];
-    else if(selectedSessions[1]===selectedSessions[0]){
+    if(!selectedSessions[0]){
+      selectedSessions=[];
+    }else if(selectedSessions[1]===selectedSessions[0]){
       selectedSessions[1]=null;bSel.value='';
     }
   }else{
-    if(!bSel.value){selectedSessions[1]=null;}
-    else{
-      if(selectedSessions[1]){}// already set
-      selectedSessions[1]=bSel.value;
-    }
+    selectedSessions[1]=bSel.value||null;
   }
-  selectedSessions=selectedSessions.filter(Boolean);
-  // keep canonical ordering: index 0 = A, index 1 = B
-  selectedSessions=selectedSessions.slice(0,2);
+  selectedSessions=selectedSessions.filter(Boolean).slice(0,2);
   bSel.disabled=!selectedSessions[0];
   drawHeatmap();
 }
@@ -1066,26 +1061,24 @@ function toggleHeatmapMode(){
 }
 
 function isShowDotsEnabled(){
-  const dotBtn=document.getElementById('heatmap-dots-btn');
-  const labelOn=dotBtn&&dotBtn.dataset.on!=='false';
-  if(labelOn===false) return false;
   const stored=storedSettings['setting-show-dots'];
   if(stored===false) return false;
-  if(stored===undefined){
-    const el=document.getElementById('setting-show-dots');
-    return !el||el.checked!==false;
-  }
-  return true;
+  if(stored===true) return true;
+  // Stored value unset → fall back to the DOM (checkbox defaults to checked)
+  const el=document.getElementById('setting-show-dots');
+  return !el||el.checked!==false;
 }
 function updateDotsBtn(){
   const btn=document.getElementById('heatmap-dots-btn');
+  if(!btn) return;
   btn.textContent='Dots: '+(isShowDotsEnabled()?'ON':'OFF');
-  btn.dataset.on=isShowDotsEnabled()?'true':'false';
 }
 function togglePingDots(){
   const el=document.getElementById('setting-show-dots');
-  el.checked=!isShowDotsEnabled();
-  commitSetting('setting-show-dots');
+  const next=!isShowDotsEnabled();
+  if(el) el.checked=next;
+  storedSettings['setting-show-dots']=next;
+  saveSettings(storedSettings);
   updateDotsBtn();
   drawHeatmap();
 }
