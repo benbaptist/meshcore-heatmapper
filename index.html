@@ -375,6 +375,7 @@
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
           Reset
         </button>
+        <button class="btn btn-secondary btn-sm" id="heatmap-dots-btn" onclick="togglePingDots()">Dots: ON</button>
         <button class="btn btn-secondary btn-sm" onclick="toggleHeatmapMode()" id="heatmap-mode-btn">SNR</button>
         <div id="map-toolbar-spacer"></div>
         <button class="btn btn-secondary btn-sm" onclick="exportCurrentSession()">
@@ -437,6 +438,28 @@
               <label><input type="radio" name="ping-size" value="2">2 bytes</label>
               <label><input type="radio" name="ping-size" value="3">3 bytes</label>
             </div>
+          </div>
+          <div class="field">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="setting-fixed-interval" style="width:auto;margin:0">
+              <span>Fixed-interval schedule</span>
+            </label>
+            <div class="hint">Skip the per-ping wait: fire the next ping on a rigid timer even if the current response is slow. Failed pings no longer slow the cadence.</div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Heatmap</h2>
+          <div class="field">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="setting-show-dots" style="width:auto;margin:0">
+              <span>Show ping dots</span>
+            </label>
+            <div class="hint">When off, only the heatmap layer and path lines are hidden. Dots also auto-hide when zoomed out or when many overlap.</div>
+          </div>
+          <div class="field">
+            <label>Dot density threshold</label>
+            <input type="number" id="setting-dot-density-threshold" value="6" min="2" max="50" step="1">
+            <div class="hint">Neighbors within 20&nbsp;px (screen) above which a dot's border is dropped so dense clusters read as one mass.</div>
           </div>
         </div>
         <div class="card">
@@ -684,8 +707,31 @@ function selectContact(idx){
   showSubView('session');
 }
 
-// ─── Ping ───────────────────────────────────────────────────────────────────
+// ─── Settings (persisted) ────────────────────────────────────────────────────
+const SETTINGS_KEY='hm-settings';
+function loadSettings(){
+  try{const raw=localStorage.getItem(SETTINGS_KEY);if(raw) return JSON.parse(raw);}catch{}
+  return {};
+}
+function saveSettings(obj){try{localStorage.setItem(SETTINGS_KEY,JSON.stringify(obj));}catch{}}
+const storedSettings=loadSettings();
 function getSetting(id){return parseInt(document.getElementById(id).value,10);}
+function getSettingBool(id){
+  if(storedSettings[id]!==undefined) return !!storedSettings[id];
+  const el=document.getElementById(id);return !!(el&&el.checked);
+}
+function commitSetting(id){
+  const el=document.getElementById(id);if(!el) return;
+  storedSettings[id]=el.type==='checkbox'?el.checked:el.value;
+  saveSettings(storedSettings);
+}
+function applyStoredSettings(){
+  for(const[id,val]of Object.entries(storedSettings)){
+    const el=document.getElementById(id);if(!el) continue;
+    if(el.type==='checkbox') el.checked=!!val;
+    else el.value=val;
+  }
+}
 function getPingSize(){const el=document.querySelector('input[name=ping-size]:checked');return el?parseInt(el.value,10):1;}
 
 function buildPingPayload(contactPubKey){
@@ -953,6 +999,31 @@ function toggleHeatmapMode(){
   drawHeatmap();
 }
 
+function isShowDotsEnabled(){
+  const dotBtn=document.getElementById('heatmap-dots-btn');
+  const labelOn=dotBtn&&dotBtn.dataset.on!=='false';
+  if(labelOn===false) return false;
+  const stored=storedSettings['setting-show-dots'];
+  if(stored===false) return false;
+  if(stored===undefined){
+    const el=document.getElementById('setting-show-dots');
+    return !el||el.checked!==false;
+  }
+  return true;
+}
+function updateDotsBtn(){
+  const btn=document.getElementById('heatmap-dots-btn');
+  btn.textContent='Dots: '+(isShowDotsEnabled()?'ON':'OFF');
+  btn.dataset.on=isShowDotsEnabled()?'true':'false';
+}
+function togglePingDots(){
+  const el=document.getElementById('setting-show-dots');
+  el.checked=!isShowDotsEnabled();
+  commitSetting('setting-show-dots');
+  updateDotsBtn();
+  drawHeatmap();
+}
+
 function snrToColor(snr,alpha=0.85){
   if(snr==null) return `rgba(100,100,100,${alpha})`;
   if(snr>0) return `rgba(74,222,128,${alpha})`;
@@ -1202,7 +1273,16 @@ function toast(msg){
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 loadSessions();
 renderSessionsList();
-renderHeatmapChips();
+applyStoredSettings();
+document.querySelectorAll('#page-settings input, #page-settings select').forEach(el=>{
+  if(el.type==='radio') el.addEventListener('change',()=>commitSetting(el.name||el.id));
+  else el.addEventListener('change',()=>commitSetting(el.id));
+});
+['setting-show-dots','setting-fixed-interval'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(el) el.addEventListener('change',()=>{commitSetting(id);if(id==='setting-show-dots'){updateDotsBtn();drawHeatmap();}});
+});
+updateDotsBtn();
 
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
