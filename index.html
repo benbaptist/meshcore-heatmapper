@@ -221,6 +221,10 @@
 
   /* ── Settings page ── */
   #page-settings .scroll-content{display:flex;flex-direction:column;gap:12px;padding:14px}
+  .about-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:.82rem;padding:3px 0}
+  .about-row + .about-row{border-top:1px solid var(--border);margin-top:4px;padding-top:7px}
+  .about-label{color:var(--muted);font-weight:500}
+  .about-value{color:var(--text);font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:.78rem}
   .field{margin-bottom:14px}
   .field:last-child{margin-bottom:0}
   .field label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:5px;font-weight:500}
@@ -482,6 +486,17 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
               Clear All Data
             </button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>About</h2>
+          <div class="about-row">
+            <span class="about-label">App</span>
+            <span class="about-value" id="about-app">MeshCore Heatmapper</span>
+          </div>
+          <div class="about-row">
+            <span class="about-label">Build cache</span>
+            <span class="about-value" id="about-sw">…</span>
           </div>
         </div>
       </div>
@@ -1118,6 +1133,15 @@ function renderLegend(){
   }
 }
 
+function loadSwVersion(){
+  const el=document.getElementById('about-sw');if(!el) return;
+  fetch('sw.js',{cache:'no-cache'}).then(r=>r.ok?r.text():'').then(src=>{
+    const m=(src||'').match(/CACHE\s*=\s*['"]([^'"]+)['"]/);
+    el.textContent=m?m[1]:'(unknown)';
+    el.title=m?`Build cache: ${m[1]}`:'';
+  }).catch(()=>{el.textContent='(offline)';});
+}
+
 function isShowDotsEnabled(){
   const stored=storedSettings['setting-show-dots'];
   if(stored===false) return false;
@@ -1505,6 +1529,7 @@ updateBEye();
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
+loadSwVersion();
 </script>
 </body>
 </html>
