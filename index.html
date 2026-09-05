@@ -815,7 +815,8 @@ function sendPing(contact){
 // ─── Session ────────────────────────────────────────────────────────────────
 async function startSession(){
   if(!connected||!selectedContact||sessionActive) return;
-  sessionActive=true;pingCount=0;pingSuccess=0;
+  sessionActive=true;pingCount=0;pingSuccess=0;pingInflight=false;
+  clearTimeout(pingTimer);pingTimer=null;
   currentSession={
     id:Date.now().toString(),
     name:document.getElementById('session-name-input').value.trim()||`Session ${new Date().toLocaleTimeString()}`,
@@ -851,17 +852,16 @@ let pingInflight=false;
 
 async function doPing(){
   if(!sessionActive) return;
-  if(pingInflight){
-    // Adaptive mode (default): a previous ping is still resolving — wait for it via the timer set at the bottom of the previous call.
-    return;
-  }
-  const interval=getSetting('setting-interval');
+  const interval=getSetting('setting-interval')||1000;
   const fixedInterval=getSettingBool('setting-fixed-interval');
 
-  // Fixed-interval mode: schedule the NEXT ping BEFORE awaiting the current one
-  // so the cadence is rigid even when responses are slow.
+  // Fixed-interval mode: always schedule next tick to maintain cadence
   if(fixedInterval){
     if(sessionActive) pingTimer=setTimeout(schedulePing,interval);
+  }
+
+  if(pingInflight){
+    return;
   }
 
   pingInflight=true;
@@ -1181,6 +1181,33 @@ function rssiToColor(rssi,alpha=0.85){
 }
 function getPointColor(ping,alpha){return heatmapMode==='snr'?snrToColor(ping.snr,alpha):rssiToColor(ping.rssi,alpha);}
 
+function getPingQuality(ping){
+  if(heatmapMode==='snr'){
+    if(ping.snr===null||ping.snr===undefined) return 0.12;
+    // SNR: -18dB (poor) to +6dB (strong)
+    const norm=(ping.snr+18)/24;
+    return Math.max(0.15,Math.min(1.0,0.15+0.85*Math.max(0,norm)));
+  }else{
+    if(ping.rssi===null||ping.rssi===undefined) return 0.12;
+    // RSSI: -125dBm (poor) to -75dBm (strong)
+    const norm=(ping.rssi+125)/50;
+    return Math.max(0.15,Math.min(1.0,0.15+0.85*Math.max(0,norm)));
+  }
+}
+
+let offscreenCanvas=null,offscreenCtx=null;
+function getOffscreenCanvas(w,h){
+  if(!offscreenCanvas){
+    offscreenCanvas=document.createElement('canvas');
+  }
+  if(offscreenCanvas.width!==w||offscreenCanvas.height!==h){
+    offscreenCanvas.width=w;
+    offscreenCanvas.height=h;
+    offscreenCtx=offscreenCanvas.getContext('2d');
+  }
+  return {offCanvas:offscreenCanvas,offCtx:offscreenCtx};
+}
+
 function drawHeatmap(){
   const canvas=document.getElementById('map-canvas');
   const wrap=document.getElementById('map-wrap');
@@ -1206,13 +1233,24 @@ function drawHeatmap(){
   allPoints.forEach(p=>{minLat=Math.min(minLat,p.lat);maxLat=Math.max(maxLat,p.lat);minLon=Math.min(minLon,p.lon);maxLon=Math.max(maxLon,p.lon);});
   const padFrac=0.15,dLat=(maxLat-minLat)||0.0005,dLon=(maxLon-minLon)||0.0005;
   minLat-=dLat*padFrac;maxLat+=dLat*padFrac;minLon-=dLon*padFrac;maxLon+=dLon*padFrac;
+  const midLat=(minLat+maxLat)/2,midLon=(minLon+maxLon)/2;
 
   const W=canvas.width,H=canvas.height;
   const scaleX=W/(maxLon-minLon),scaleY=H/(maxLat-minLat);
-  const mapScale=Math.min(scaleX,scaleY)*mapState.scale;
-  const offsetX=(W-(maxLon-minLon)*mapScale)/2+mapState.panX;
-  const offsetY=(H-(maxLat-minLat)*mapScale)/2+mapState.panY;
-  const toCanvas=(lat,lon)=>({x:(lon-minLon)*mapScale+offsetX,y:H-(lat-minLat)*mapScale+offsetY});
+  const baseScale=Math.min(scaleX,scaleY);
+  const mapScale=baseScale*mapState.scale;
+
+  // Symmetric projection centered on (midLon, midLat)
+  const toCanvas=(lat,lon)=>({
+    x: W/2 + (lon - midLon)*mapScale + mapState.panX,
+    y: H/2 - (lat - midLat)*mapScale + mapState.panY
+  });
+
+  // Inverse projection: canvas pixels -> lat/lon
+  const invProj=(cx,cy)=>({
+    lon: (cx - W/2 - mapState.panX)/mapScale + midLon,
+    lat: midLat - (cy - H/2 - mapState.panY)/mapScale
+  });
 
   // ── Draw OSM tiles ──────────────────────────────────────────────────
   const z=Math.round(Math.log2(mapScale*360/TILE_SIZE));
@@ -1222,9 +1260,6 @@ function drawHeatmap(){
   const tileYToLat=ty=>{const r=180/Math.PI;return Math.atan(Math.sinh(Math.PI*(1-2*ty/n)))*r;};
   const lonToTileX=lon=>(lon+180)/360*n;
   const tileXToLon=tx=>tx/n*360-180;
-
-  // Inverse: canvas → lat/lon
-  const invProj=(cx,cy)=>({lon:(cx-offsetX)/mapScale+minLon,lat:(H-cy+offsetY)/mapScale+minLat});
 
   // Get visible tile range (use min/max to handle any pan direction)
   const nw=invProj(0,0),se=invProj(W,H);
@@ -1255,62 +1290,79 @@ function drawHeatmap(){
       const cSE=toCanvas(tSE.lat,tSE.lon);
       const cx=cNW.x,cy=cNW.y,cw=cSE.x-cNW.x,ch=cSE.y-cNW.y;
       if(cx+cw<0||cy+ch<0||cx>W||cy>H) continue;
-      ctx.globalAlpha=0.45;
+      ctx.globalAlpha=0.65;
       ctx.drawImage(img,cx,cy,cw,ch);
       ctx.globalAlpha=1;
     }
   }
   // Dark overlay for heatmap readability
-  ctx.fillStyle='rgba(10,15,30,0.35)';
+  ctx.fillStyle='rgba(10,15,30,0.25)';
   ctx.fillRect(0,0,W,H);
 
-  // ── Heatmap density accumulator ──
-  // Splat a Gaussian kernel per ping into R/G/B/sum buffers, weighting each
-  // ping by its SNR/RSSI color (heatmapMode). Output alpha is modulated by
-  // density; tone is from the per-ping palette.
+  // ── Heatmap density & color accumulator ──
+  // Fast splatting with clamped screen-space radius, frustum culling, and 1D falloff LUT
   const sumBuf=new Float32Array(W*H);
   const rBuf=new Float32Array(W*H);
   const gBuf=new Float32Array(W*H);
   const bBuf=new Float32Array(W*H);
-  const kernelR=Math.max(20,40*mapState.scale);
+  const qBuf=new Float32Array(W*H);
+
+  // Kernel radius in screen pixels: clamped so zooming in doesn't explode iteration count
+  const kernelR=Math.min(45,Math.max(16,24*Math.sqrt(mapState.scale)));
   const sigma=kernelR/3;
   const invTwoSigmaSq=1/(2*sigma*sigma);
-  const radius=Math.ceil(kernelR*1.2);
+  const radius=Math.ceil(kernelR*1.15);
   const radiusSq=radius*radius;
+
+  // Precomputed Gaussian falloff lookup table by integer squared distance
+  const lut=new Float32Array(radiusSq+1);
+  for(let d=0;d<=radiusSq;d++){
+    lut[d]=Math.exp(-d*invTwoSigmaSq);
+  }
+
   for(const p of allPoints){
     const{x,y}=toCanvas(p.lat,p.lon);
-    // Look up this ping's color. Null/timed-out pings get a neutral grey contribution.
+    // Viewport frustum culling: skip off-screen points
+    if(x<-radius||x>W+radius||y<-radius||y>H+radius) continue;
+
     let pr=140,pg=140,pb=140;
     const sigVal=heatmapMode==='snr'?p.snr:p.rssi;
     if(sigVal!==null&&sigVal!==undefined){
-      const col=getPointColor(p,1); // rgba(r,g,b,a)
+      const col=getPointColor(p,1);
       const m=col.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
       if(m){pr=+m[1];pg=+m[2];pb=+m[3];}
     }
+    const q=getPingQuality(p);
+
     const x0=Math.max(0,Math.floor(x-radius));
     const x1=Math.min(W-1,Math.ceil(x+radius));
     const y0=Math.max(0,Math.floor(y-radius));
     const y1=Math.min(H-1,Math.ceil(y+radius));
+
     for(let py=y0;py<=y1;py++){
       const dy=py-y;
+      const dySq=dy*dy;
       const rowBase=py*W;
       for(let px=x0;px<=x1;px++){
         const dx=px-x;
-        const dSq=dx*dx+dy*dy;
+        const dSq=Math.round(dx*dx+dySq);
         if(dSq>radiusSq) continue;
-        const w=Math.exp(-dSq*invTwoSigmaSq);
+        const w=lut[dSq];
+        if(w<0.005) continue;
         const idx=rowBase+px;
         sumBuf[idx]+=w;
         rBuf[idx]+=w*pr;
         gBuf[idx]+=w*pg;
         bBuf[idx]+=w*pb;
+        qBuf[idx]+=w*q;
       }
     }
   }
   let maxSum=0;
   for(let i=0;i<sumBuf.length;i++) if(sumBuf[i]>maxSum) maxSum=sumBuf[i];
   if(maxSum>0){
-    const imageData=ctx.createImageData(W,H);
+    const{offCanvas,offCtx}=getOffscreenCanvas(W,H);
+    const imageData=offCtx.createImageData(W,H);
     const data=imageData.data;
     for(let i=0;i<sumBuf.length;i++){
       const s=sumBuf[i];
@@ -1319,12 +1371,15 @@ function drawHeatmap(){
       let r=rBuf[i]/s,g=gBuf[i]/s,b=bBuf[i]/s;
       // Tone-down pale greys from null pings so they don't wash the map.
       if(r===140&&g===140&&b===140){r*=0.5;g*=0.5;b*=0.5;}
-      const t=Math.min(1,Math.pow(s/maxSum,0.5));
-      const a=Math.round(50+170*t);
+      const avgQ=qBuf[i]/s;
+      const densityT=Math.min(1,Math.pow(s/maxSum,0.5));
+      // Weak signals are significantly more translucent; strong signals are opaque
+      const a=Math.round(Math.max(12,(25+195*densityT)*avgQ));
       const o=i*4;
       data[o]=Math.round(r);data[o+1]=Math.round(g);data[o+2]=Math.round(b);data[o+3]=a;
     }
-    ctx.putImageData(imageData,0,0);
+    offCtx.putImageData(imageData,0,0);
+    ctx.drawImage(offCanvas,0,0);
   }
 
   // ── Path lines (between dots of the same session) ──
@@ -1436,25 +1491,34 @@ window.addEventListener('mousemove',e=>{
 window.addEventListener('mouseup',()=>{mapDragging=false;mapCanvas.classList.remove('panning');});
 mapCanvas.addEventListener('wheel',e=>{
   e.preventDefault();
-  mapState.scale=Math.max(0.3,Math.min(20,mapState.scale*(e.deltaY<0?1.1:0.9)));
+  const rect=mapCanvas.getBoundingClientRect();
+  const anchorX=e.clientX-rect.left;
+  const anchorY=e.clientY-rect.top;
+  const W=mapCanvas.width,H=mapCanvas.height;
+  const zoomFactor=e.deltaY<0?1.15:0.87;
+  const newScale=Math.max(0.2,Math.min(50,mapState.scale*zoomFactor));
+  const ratio=newScale/mapState.scale;
+  mapState.scale=newScale;
+  mapState.panX=(anchorX-W/2)*(1-ratio)+mapState.panX*ratio;
+  mapState.panY=(anchorY-H/2)*(1-ratio)+mapState.panY*ratio;
   requestDraw();
 },{passive:false});
 
 let touchStart=null,pinchStart=null;
 mapCanvas.addEventListener('touchstart',e=>{
+  const rect=mapCanvas.getBoundingClientRect();
   if(e.touches.length===2){
-    const dx=e.touches[0].clientX-e.touches[1].clientX;
-    const dy=e.touches[0].clientY-e.touches[1].clientY;
-    const rect=mapCanvas.getBoundingClientRect();
-    // cx/cy are canvas-pixel coords RELATIVE TO CANVAS CENTER, matching how
-    // mapState.panX/panY are stored (offset from the centered-data position).
+    const t0=e.touches[0],t1=e.touches[1];
+    const dx=t0.clientX-t1.clientX,dy=t0.clientY-t1.clientY;
+    const midX=(t0.clientX+t1.clientX)/2-rect.left;
+    const midY=(t0.clientY+t1.clientY)/2-rect.top;
     pinchStart={
-      dist:Math.sqrt(dx*dx+dy*dy),
+      dist:Math.hypot(dx,dy),
       scale:mapState.scale,
       panX:mapState.panX,
       panY:mapState.panY,
-      cx:(e.touches[0].clientX+e.touches[1].clientX)/2-rect.left-rect.width/2,
-      cy:(e.touches[0].clientY+e.touches[1].clientY)/2-rect.top-rect.height/2,
+      anchorX:midX,
+      anchorY:midY,
     };
     touchStart=null;
   }else if(e.touches.length===1){
@@ -1463,17 +1527,21 @@ mapCanvas.addEventListener('touchstart',e=>{
   }
 },{passive:true});
 mapCanvas.addEventListener('touchmove',e=>{
+  const rect=mapCanvas.getBoundingClientRect();
   if(e.touches.length===2&&pinchStart){
     e.preventDefault();
-    const dx=e.touches[0].clientX-e.touches[1].clientX;
-    const dy=e.touches[0].clientY-e.touches[1].clientY;
-    const dist=Math.sqrt(dx*dx+dy*dy);
-    const factor=dist/pinchStart.dist;
-    const newScale=Math.max(0.3,Math.min(20,pinchStart.scale*factor));
+    const t0=e.touches[0],t1=e.touches[1];
+    const dx=t0.clientX-t1.clientX,dy=t0.clientY-t1.clientY;
+    const dist=Math.hypot(dx,dy);
+    const currMidX=(t0.clientX+t1.clientX)/2-rect.left;
+    const currMidY=(t0.clientY+t1.clientY)/2-rect.top;
+    const factor=dist/Math.max(1,pinchStart.dist);
+    const newScale=Math.max(0.2,Math.min(50,pinchStart.scale*factor));
     const ratio=newScale/pinchStart.scale;
     mapState.scale=newScale;
-    mapState.panX=pinchStart.cx+ratio*(pinchStart.panX-pinchStart.cx);
-    mapState.panY=pinchStart.cy+ratio*(pinchStart.panY-pinchStart.cy);
+    const W=mapCanvas.width,H=mapCanvas.height;
+    mapState.panX=currMidX-W/2-(pinchStart.anchorX-W/2-pinchStart.panX)*ratio;
+    mapState.panY=currMidY-H/2-(pinchStart.anchorY-H/2-pinchStart.panY)*ratio;
     requestDraw();
   }else if(e.touches.length===1&&touchStart){
     e.preventDefault();
@@ -1483,8 +1551,13 @@ mapCanvas.addEventListener('touchmove',e=>{
   }
 },{passive:false});
 mapCanvas.addEventListener('touchend',e=>{
-  if(e.touches.length<2) pinchStart=null;
-  if(e.touches.length===0) touchStart=null;
+  if(e.touches.length===1){
+    pinchStart=null;
+    touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY,panX:mapState.panX,panY:mapState.panY};
+  }else if(e.touches.length===0){
+    pinchStart=null;
+    touchStart=null;
+  }
 });
 
 // ─── Resize ──────────────────────────────────────────────────────────────────
