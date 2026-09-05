@@ -1,4 +1,4 @@
-const CACHE = 'meshcore-heatmapper-v2.4.1';
+const CACHE = 'meshcore-heatmapper-v2.5';
 const ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {

@@ -148,6 +148,8 @@
   /* Stats row */
   .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;flex-shrink:0}
   .stat-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px;text-align:center}
+  .stat-box.clickable{cursor:pointer;user-select:none;transition:border-color .15s,background .15s}
+  .stat-box.clickable:hover{border-color:var(--accent);background:var(--surface2)}
   .stat-val{font-size:1.2rem;font-weight:700;color:var(--accent);line-height:1.1}
   .stat-label{font-size:.68rem;color:var(--muted);margin-top:2px;font-weight:500}
 
@@ -210,8 +212,8 @@
 
   /* ── Logs page ── */
   #page-logs .scroll-content{display:flex;flex-direction:column;gap:8px;padding:14px}
-  .session-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);transition:border-color .15s;flex-shrink:0}
-  .session-row:hover{border-color:var(--border2)}
+  .session-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);transition:border-color .15s,background .15s;flex-shrink:0;cursor:pointer}
+  .session-row:hover{border-color:var(--accent);background:var(--accent-dim)}
   .session-row-info{flex:1;min-width:0}
   .session-row .name{font-weight:600;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .session-row .meta{font-size:.75rem;color:var(--muted);margin-top:2px}
@@ -344,7 +346,7 @@
         <!-- Stats -->
         <div class="stat-grid">
           <div class="stat-box"><div class="stat-val" id="stat-rtt">—</div><div class="stat-label">RTT ms</div></div>
-          <div class="stat-box"><div class="stat-val" id="stat-snr">—</div><div class="stat-label">SNR dB</div></div>
+          <div class="stat-box clickable" id="stat-signal-box" onclick="toggleSignalMetric()" title="Click to toggle SNR / RSSI"><div class="stat-val" id="stat-signal">—</div><div class="stat-label" id="stat-signal-label">SNR dB</div></div>
           <div class="stat-box"><div class="stat-val" id="stat-success">—</div><div class="stat-label">Success</div></div>
         </div>
 
@@ -392,7 +394,7 @@
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
           Reset
         </button>
-        <button class="btn btn-secondary btn-sm" id="heatmap-dots-btn" onclick="togglePingDots()">Dots: ON</button>
+        <button class="btn btn-secondary btn-sm" id="heatmap-layer-btn" onclick="cycleHeatmapLayer()">Layer: Both</button>
         <button class="btn btn-secondary btn-sm" onclick="toggleHeatmapMode()" id="heatmap-mode-btn">SNR</button>
         <div id="map-toolbar-spacer"></div>
         <button class="btn btn-secondary btn-sm" onclick="exportCurrentSession()">
@@ -463,11 +465,13 @@
         <div class="card">
           <h2>Heatmap</h2>
           <div class="field">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-              <input type="checkbox" id="setting-show-dots" style="width:auto;margin:0">
-              <span>Show ping dots</span>
-            </label>
-            <div class="hint">When off, only the heatmap layer and path lines are hidden. Dots also auto-hide when zoomed out or when many overlap.</div>
+            <label>Visible Layers</label>
+            <div class="radio-group">
+              <label><input type="radio" name="heatmap-layer-mode" value="both" checked>Both</label>
+              <label><input type="radio" name="heatmap-layer-mode" value="dots">Dots Only</label>
+              <label><input type="radio" name="heatmap-layer-mode" value="blur">Blur Only</label>
+            </div>
+            <div class="hint">Toggle between showing both layers, ping dots only, or blur heatmap only.</div>
           </div>
           <div class="field">
             <label>Dot density threshold</label>
@@ -548,6 +552,7 @@ let pingCount=0,pingSuccess=0;
 let heatmapMode='snr';
 let selectedSessions=[];
 let showB=true;
+let lastPingResult=null;
 let mapState={panX:0,panY:0,scale:1};
 let pendingRenameId=null;
 let mapDragging=false,mapDragStart={x:0,y:0},mapPanStart={x:0,y:0};
@@ -815,7 +820,7 @@ function sendPing(contact){
 // ─── Session ────────────────────────────────────────────────────────────────
 async function startSession(){
   if(!connected||!selectedContact||sessionActive) return;
-  sessionActive=true;pingCount=0;pingSuccess=0;pingInflight=false;
+  sessionActive=true;pingCount=0;pingSuccess=0;pingInflight=false;lastPingResult=null;
   clearTimeout(pingTimer);pingTimer=null;
   currentSession={
     id:Date.now().toString(),
@@ -875,14 +880,16 @@ async function doPing(){
   const gpsData=gpsActive?lastGPS:null;
   if(result){
     updateBanner('received');
+    lastPingResult=result;
     if(currentSession) currentSession.pings.push({ts:Date.now(),rtt:result.rtt,snr:result.snr,rssi:result.rssi,lat:gpsData?gpsData.lat:null,lon:gpsData?gpsData.lon:null});
-    addLogEntry(true,result.rtt,result.snr);
+    addLogEntry(true,result.rtt,result.snr,result.rssi);
     document.getElementById('stat-rtt').textContent=result.rtt;
-    document.getElementById('stat-snr').textContent=result.snr.toFixed(1);
+    updateSessionSignalDisplay();
   }else{
     updateBanner('timeout');
+    lastPingResult=null;
     if(currentSession) currentSession.pings.push({ts:Date.now(),rtt:null,snr:null,rssi:null,lat:gpsData?gpsData.lat:null,lon:gpsData?gpsData.lon:null});
-    addLogEntry(false,null,null);
+    addLogEntry(false,null,null,null);
   }
   document.getElementById('banner-count-num').textContent=pingCount;
   document.getElementById('stat-success').textContent=(pingCount>0?Math.round(pingSuccess/pingCount*100):0)+'%';
@@ -903,7 +910,7 @@ function updateBanner(state){
   dot.className=state==='sending'?'connected pinging':connected?'connected':'';
 }
 
-function addLogEntry(ok,rtt,snr){
+function addLogEntry(ok,rtt,snr,rssi){
   const log=document.getElementById('ping-log-scroll');
   const emptyEl=log.querySelector('.log-empty');
   if(emptyEl) emptyEl.remove();
@@ -911,14 +918,63 @@ function addLogEntry(ok,rtt,snr){
   entry.className='log-entry '+(ok?'ok':'timeout');
   const time=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   if(ok){
-    const snrPct=Math.max(0,Math.min(100,(snr+20)*3.33));
-    const snrCol=snr>0?'var(--green)':snr>-5?'var(--yellow)':snr>-10?'var(--orange)':'var(--red)';
-    entry.innerHTML=`<div class="dot"></div><span class="time">${time}</span><span class="rtt">${rtt}ms</span><div class="snr-bar-track"><div class="snr-bar-fill" style="width:${snrPct}%;background:${snrCol}"></div></div><span class="snr">${snr.toFixed(1)}dB</span>`;
+    entry.dataset.snr=snr;
+    entry.dataset.rssi=rssi;
+    entry.dataset.rtt=rtt;
+    entry.dataset.time=time;
+    renderLogEntryContent(entry,true,rtt,snr,rssi,time);
   }else{
     entry.innerHTML=`<div class="dot"></div><span class="time">${time}</span><span class="rtt">timeout</span>`;
   }
   log.prepend(entry);
   while(log.children.length>80) log.removeChild(log.lastChild);
+}
+
+function renderLogEntryContent(entry,ok,rtt,snr,rssi,time){
+  if(!ok) return;
+  if(heatmapMode==='snr'){
+    const snrPct=Math.max(0,Math.min(100,(snr+20)*3.33));
+    const snrCol=snr>0?'var(--green)':snr>-5?'var(--yellow)':snr>-10?'var(--orange)':'var(--red)';
+    entry.innerHTML=`<div class="dot"></div><span class="time">${time}</span><span class="rtt">${rtt}ms</span><div class="snr-bar-track"><div class="snr-bar-fill" style="width:${snrPct}%;background:${snrCol}"></div></div><span class="snr">${Number(snr).toFixed(1)}dB</span>`;
+  }else{
+    // RSSI: -125dBm to -75dBm
+    const rssiPct=Math.max(0,Math.min(100,(rssi+125)*2));
+    const rssiCol=rssi>-80?'var(--green)':rssi>-100?'var(--yellow)':rssi>-115?'var(--orange)':'var(--red)';
+    entry.innerHTML=`<div class="dot"></div><span class="time">${time}</span><span class="rtt">${rtt}ms</span><div class="snr-bar-track"><div class="snr-bar-fill" style="width:${rssiPct}%;background:${rssiCol}"></div></div><span class="snr">${Math.round(rssi)}dBm</span>`;
+  }
+}
+
+function updateSessionSignalDisplay(){
+  const labelEl=document.getElementById('stat-signal-label');
+  const valEl=document.getElementById('stat-signal');
+  if(!labelEl||!valEl) return;
+  if(heatmapMode==='snr'){
+    labelEl.textContent='SNR dB';
+    valEl.textContent=lastPingResult&&lastPingResult.snr!==null&&lastPingResult.snr!==undefined?lastPingResult.snr.toFixed(1):'—';
+  }else{
+    labelEl.textContent='RSSI dBm';
+    valEl.textContent=lastPingResult&&lastPingResult.rssi!==null&&lastPingResult.rssi!==undefined?Math.round(lastPingResult.rssi):'—';
+  }
+}
+
+function refreshAllPingLogs(){
+  document.querySelectorAll('#ping-log-scroll .log-entry.ok').forEach(entry=>{
+    const snr=parseFloat(entry.dataset.snr);
+    const rssi=parseFloat(entry.dataset.rssi);
+    const rtt=entry.dataset.rtt;
+    const time=entry.dataset.time;
+    renderLogEntryContent(entry,true,rtt,snr,rssi,time);
+  });
+}
+
+function toggleSignalMetric(){
+  heatmapMode=heatmapMode==='snr'?'rssi':'snr';
+  const modeBtn=document.getElementById('heatmap-mode-btn');
+  if(modeBtn) modeBtn.textContent=heatmapMode.toUpperCase();
+  updateSessionSignalDisplay();
+  refreshAllPingLogs();
+  renderLegend();
+  drawHeatmap();
 }
 
 // ─── GPS ────────────────────────────────────────────────────────────────────
@@ -957,17 +1013,23 @@ function renderSessionsList(){
   if(!sessions.length){empty.style.display='flex';el.innerHTML='';return;}
   empty.style.display='none';
   el.innerHTML=sessions.map((s,i)=>`
-    <div class="session-row">
+    <div class="session-row" onclick="viewSessionInHeatmap('${s.id}')">
       <div class="session-row-info">
         <div class="name">${escHtml(s.name)}</div>
         <div class="meta">${escHtml(s.target)} &middot; ${s.pings.length} pings &middot; ${new Date(s.startTime).toLocaleString()}</div>
       </div>
       <div class="actions">
-        <button class="icon-btn" title="Rename" onclick="openRenameModal(${i})">${ICON_PENCIL}</button>
-        <button class="icon-btn" title="Export" onclick="exportSession(${i})">${ICON_DOWNLOAD}</button>
-        <button class="icon-btn" title="Delete" onclick="deleteSession(${i})">${ICON_TRASH}</button>
+        <button class="icon-btn" title="Rename" onclick="event.stopPropagation();openRenameModal(${i})">${ICON_PENCIL}</button>
+        <button class="icon-btn" title="Export" onclick="event.stopPropagation();exportSession(${i})">${ICON_DOWNLOAD}</button>
+        <button class="icon-btn" title="Delete" onclick="event.stopPropagation();deleteSession(${i})">${ICON_TRASH}</button>
       </div>
     </div>`).join('');
+}
+
+function viewSessionInHeatmap(id){
+  selectedSessions=[id];
+  const heatmapNavBtn=document.querySelector('nav button:nth-child(2)');
+  showPage('heatmap',heatmapNavBtn);
 }
 
 function deleteSession(idx){
@@ -1110,10 +1172,7 @@ function toggleHeatmapSession(id){
 }
 
 function toggleHeatmapMode(){
-  heatmapMode=heatmapMode==='snr'?'rssi':'snr';
-  document.getElementById('heatmap-mode-btn').textContent=heatmapMode.toUpperCase();
-  renderLegend();
-  drawHeatmap();
+  toggleSignalMetric();
 }
 
 function renderLegend(){
@@ -1143,26 +1202,47 @@ function loadSwVersion(){
 }
 
 function isShowDotsEnabled(){
-  const stored=storedSettings['setting-show-dots'];
-  if(stored===false) return false;
-  if(stored===true) return true;
-  // Stored value unset → fall back to the DOM (checkbox defaults to checked)
-  const el=document.getElementById('setting-show-dots');
-  return !el||el.checked!==false;
+  const mode=getHeatmapLayerMode();
+  return mode==='both'||mode==='dots';
 }
-function updateDotsBtn(){
-  const btn=document.getElementById('heatmap-dots-btn');
+function isShowBlurEnabled(){
+  const mode=getHeatmapLayerMode();
+  return mode==='both'||mode==='blur';
+}
+function getHeatmapLayerMode(){
+  const stored=storedSettings['heatmap-layer-mode'];
+  if(stored==='both'||stored==='dots'||stored==='blur') return stored;
+  // Migration fallback from old boolean setting
+  if(storedSettings['setting-show-dots']===false) return 'blur';
+  const checkedRadio=document.querySelector('input[name="heatmap-layer-mode"]:checked');
+  return checkedRadio?checkedRadio.value:'both';
+}
+function updateLayerBtn(){
+  const btn=document.getElementById('heatmap-layer-btn');
   if(!btn) return;
-  btn.textContent='Dots: '+(isShowDotsEnabled()?'ON':'OFF');
+  const mode=getHeatmapLayerMode();
+  const labels={both:'Layer: Both',dots:'Layer: Dots',blur:'Layer: Blur'};
+  btn.textContent=labels[mode]||'Layer: Both';
 }
-function togglePingDots(){
-  const el=document.getElementById('setting-show-dots');
-  const next=!isShowDotsEnabled();
-  if(el) el.checked=next;
-  storedSettings['setting-show-dots']=next;
+function cycleHeatmapLayer(){
+  const current=getHeatmapLayerMode();
+  const nextOrder={both:'dots',dots:'blur',blur:'both'};
+  const next=nextOrder[current]||'both';
+  setHeatmapLayerMode(next);
+}
+function setHeatmapLayerMode(mode){
+  storedSettings['heatmap-layer-mode']=mode;
+  delete storedSettings['setting-show-dots'];
   saveSettings(storedSettings);
-  updateDotsBtn();
+  const targetRadio=document.querySelector(`input[name="heatmap-layer-mode"][value="${mode}"]`);
+  if(targetRadio) targetRadio.checked=true;
+  updateLayerBtn();
   drawHeatmap();
+}
+
+// Backwards-compatibility shim
+function togglePingDots(){
+  cycleHeatmapLayer();
 }
 
 function snrToColor(snr,alpha=0.85){
@@ -1300,86 +1380,88 @@ function drawHeatmap(){
   ctx.fillRect(0,0,W,H);
 
   // ── Heatmap density & color accumulator ──
-  // Fast splatting with clamped screen-space radius, frustum culling, and 1D falloff LUT
-  const sumBuf=new Float32Array(W*H);
-  const rBuf=new Float32Array(W*H);
-  const gBuf=new Float32Array(W*H);
-  const bBuf=new Float32Array(W*H);
-  const qBuf=new Float32Array(W*H);
+  if(isShowBlurEnabled()){
+    // Fast splatting with clamped screen-space radius, frustum culling, and 1D falloff LUT
+    const sumBuf=new Float32Array(W*H);
+    const rBuf=new Float32Array(W*H);
+    const gBuf=new Float32Array(W*H);
+    const bBuf=new Float32Array(W*H);
+    const qBuf=new Float32Array(W*H);
 
-  // Kernel radius in screen pixels: clamped so zooming in doesn't explode iteration count
-  const kernelR=Math.min(45,Math.max(16,24*Math.sqrt(mapState.scale)));
-  const sigma=kernelR/3;
-  const invTwoSigmaSq=1/(2*sigma*sigma);
-  const radius=Math.ceil(kernelR*1.15);
-  const radiusSq=radius*radius;
+    // Kernel radius in screen pixels: clamped so zooming in doesn't explode iteration count
+    const kernelR=Math.min(45,Math.max(16,24*Math.sqrt(mapState.scale)));
+    const sigma=kernelR/3;
+    const invTwoSigmaSq=1/(2*sigma*sigma);
+    const radius=Math.ceil(kernelR*1.15);
+    const radiusSq=radius*radius;
 
-  // Precomputed Gaussian falloff lookup table by integer squared distance
-  const lut=new Float32Array(radiusSq+1);
-  for(let d=0;d<=radiusSq;d++){
-    lut[d]=Math.exp(-d*invTwoSigmaSq);
-  }
-
-  for(const p of allPoints){
-    const{x,y}=toCanvas(p.lat,p.lon);
-    // Viewport frustum culling: skip off-screen points
-    if(x<-radius||x>W+radius||y<-radius||y>H+radius) continue;
-
-    let pr=140,pg=140,pb=140;
-    const sigVal=heatmapMode==='snr'?p.snr:p.rssi;
-    if(sigVal!==null&&sigVal!==undefined){
-      const col=getPointColor(p,1);
-      const m=col.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-      if(m){pr=+m[1];pg=+m[2];pb=+m[3];}
+    // Precomputed Gaussian falloff lookup table by integer squared distance
+    const lut=new Float32Array(radiusSq+1);
+    for(let d=0;d<=radiusSq;d++){
+      lut[d]=Math.exp(-d*invTwoSigmaSq);
     }
-    const q=getPingQuality(p);
 
-    const x0=Math.max(0,Math.floor(x-radius));
-    const x1=Math.min(W-1,Math.ceil(x+radius));
-    const y0=Math.max(0,Math.floor(y-radius));
-    const y1=Math.min(H-1,Math.ceil(y+radius));
+    for(const p of allPoints){
+      const{x,y}=toCanvas(p.lat,p.lon);
+      // Viewport frustum culling: skip off-screen points
+      if(x<-radius||x>W+radius||y<-radius||y>H+radius) continue;
 
-    for(let py=y0;py<=y1;py++){
-      const dy=py-y;
-      const dySq=dy*dy;
-      const rowBase=py*W;
-      for(let px=x0;px<=x1;px++){
-        const dx=px-x;
-        const dSq=Math.round(dx*dx+dySq);
-        if(dSq>radiusSq) continue;
-        const w=lut[dSq];
-        if(w<0.005) continue;
-        const idx=rowBase+px;
-        sumBuf[idx]+=w;
-        rBuf[idx]+=w*pr;
-        gBuf[idx]+=w*pg;
-        bBuf[idx]+=w*pb;
-        qBuf[idx]+=w*q;
+      let pr=140,pg=140,pb=140;
+      const sigVal=heatmapMode==='snr'?p.snr:p.rssi;
+      if(sigVal!==null&&sigVal!==undefined){
+        const col=getPointColor(p,1);
+        const m=col.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        if(m){pr=+m[1];pg=+m[2];pb=+m[3];}
+      }
+      const q=getPingQuality(p);
+
+      const x0=Math.max(0,Math.floor(x-radius));
+      const x1=Math.min(W-1,Math.ceil(x+radius));
+      const y0=Math.max(0,Math.floor(y-radius));
+      const y1=Math.min(H-1,Math.ceil(y+radius));
+
+      for(let py=y0;py<=y1;py++){
+        const dy=py-y;
+        const dySq=dy*dy;
+        const rowBase=py*W;
+        for(let px=x0;px<=x1;px++){
+          const dx=px-x;
+          const dSq=Math.round(dx*dx+dySq);
+          if(dSq>radiusSq) continue;
+          const w=lut[dSq];
+          if(w<0.005) continue;
+          const idx=rowBase+px;
+          sumBuf[idx]+=w;
+          rBuf[idx]+=w*pr;
+          gBuf[idx]+=w*pg;
+          bBuf[idx]+=w*pb;
+          qBuf[idx]+=w*q;
+        }
       }
     }
-  }
-  let maxSum=0;
-  for(let i=0;i<sumBuf.length;i++) if(sumBuf[i]>maxSum) maxSum=sumBuf[i];
-  if(maxSum>0){
-    const{offCanvas,offCtx}=getOffscreenCanvas(W,H);
-    const imageData=offCtx.createImageData(W,H);
-    const data=imageData.data;
-    for(let i=0;i<sumBuf.length;i++){
-      const s=sumBuf[i];
-      if(s<0.01) continue;
-      // Mean color at this pixel (weighted by Gaussian contribution).
-      let r=rBuf[i]/s,g=gBuf[i]/s,b=bBuf[i]/s;
-      // Tone-down pale greys from null pings so they don't wash the map.
-      if(r===140&&g===140&&b===140){r*=0.5;g*=0.5;b*=0.5;}
-      const avgQ=qBuf[i]/s;
-      const densityT=Math.min(1,Math.pow(s/maxSum,0.5));
-      // Weak signals are significantly more translucent; strong signals are opaque
-      const a=Math.round(Math.max(12,(25+195*densityT)*avgQ));
-      const o=i*4;
-      data[o]=Math.round(r);data[o+1]=Math.round(g);data[o+2]=Math.round(b);data[o+3]=a;
+    let maxSum=0;
+    for(let i=0;i<sumBuf.length;i++) if(sumBuf[i]>maxSum) maxSum=sumBuf[i];
+    if(maxSum>0){
+      const{offCanvas,offCtx}=getOffscreenCanvas(W,H);
+      const imageData=offCtx.createImageData(W,H);
+      const data=imageData.data;
+      for(let i=0;i<sumBuf.length;i++){
+        const s=sumBuf[i];
+        if(s<0.01) continue;
+        // Mean color at this pixel (weighted by Gaussian contribution).
+        let r=rBuf[i]/s,g=gBuf[i]/s,b=bBuf[i]/s;
+        // Tone-down pale greys from null pings so they don't wash the map.
+        if(r===140&&g===140&&b===140){r*=0.5;g*=0.5;b*=0.5;}
+        const avgQ=qBuf[i]/s;
+        const densityT=Math.min(1,Math.pow(s/maxSum,0.5));
+        // Weak signals are significantly more translucent; strong signals are opaque
+        const a=Math.round(Math.max(12,(25+195*densityT)*avgQ));
+        const o=i*4;
+        data[o]=Math.round(r);data[o+1]=Math.round(g);data[o+2]=Math.round(b);data[o+3]=a;
+      }
+      offCtx.putImageData(imageData,0,0);
+      ctx.drawImage(offCanvas,0,0);
     }
-    offCtx.putImageData(imageData,0,0);
-    ctx.drawImage(offCanvas,0,0);
   }
 
   // ── Path lines (between dots of the same session) ──
@@ -1590,13 +1672,17 @@ renderHeatmapChips();
 applyStoredSettings();
 renderLegend();
 document.querySelectorAll('#page-settings input, #page-settings select').forEach(el=>{
-  el.addEventListener('change',()=>commitSetting(el.id||el.name,el));
+  el.addEventListener('change',()=>{
+    commitSetting(el.id||el.name,el);
+    if(el.name==='heatmap-layer-mode'){
+      updateLayerBtn();
+      drawHeatmap();
+    }
+  });
 });
-['setting-show-dots','setting-fixed-interval'].forEach(id=>{
-  const el=document.getElementById(id);
-  if(el) el.addEventListener('change',()=>{commitSetting(id);if(id==='setting-show-dots'){updateDotsBtn();drawHeatmap();}});
-});
-updateDotsBtn();
+const fixedIntervalEl=document.getElementById('setting-fixed-interval');
+if(fixedIntervalEl) fixedIntervalEl.addEventListener('change',()=>commitSetting('setting-fixed-interval',fixedIntervalEl));
+updateLayerBtn();
 updateBEye();
 
 if('serviceWorker' in navigator){
